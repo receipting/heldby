@@ -17,8 +17,8 @@ classifiers = [
 dependencies = ["pyyaml>=6.0.2"]
 
 [project.urls]
-Homepage = "https://github.com/hudgeon/heldby"
-Issues = "https://github.com/hudgeon/heldby/issues"
+Homepage = "https://github.com/receipting/heldby"
+Issues = "https://github.com/receipting/heldby/issues"
 
 [project.scripts]
 heldby = "heldby.cli:main"
