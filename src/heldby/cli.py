@@ -144,7 +144,7 @@ def cmd_catalog(args: argparse.Namespace) -> int:
                 file=sys.stderr,
             )
             return EXIT_FINDING
-        print(f"\nheldby: additive — {len(added)} rules added, none removed or altered.")
+        print(f"\nheldby: additive — {len(added)} rule(s) added, none removed or altered.")
         return EXIT_OK
 
     if args.check_registries:
