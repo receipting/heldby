@@ -1,0 +1,72 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Catalogue loads
+        run: uv run heldby catalog > /dev/null
+
+      - name: Tests
+        run: uv run pytest -q
+
+      - name: Determinism — two runs must agree
+        run: |
+          uv run heldby catalog --json > /tmp/first.json
+          uv run heldby catalog --json > /tmp/second.json
+          diff -q /tmp/first.json /tmp/second.json
+
+  registries:
+    # Resolves every catalogued package name against npm and PyPI. Separate job
+    # because it talks to the network: a registry outage must not read as a
+    # broken pull request.
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv run heldby catalog --check-registries
+
+  additive:
+    # Informational on a human pull request, and a hard gate on the nightly bot
+    # run (see catalog-freshness.yml). A person may narrow a rule when they have
+    # decided to; the unattended job may not.
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@v5
+      - name: Does this change only add rules?
+        env:
+          # Via env, never interpolated into the shell: a ref name is untrusted input.
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          if uv run heldby catalog --assert-additive "origin/${BASE_REF}"; then
+            echo "Catalogue change is additive." >> "$GITHUB_STEP_SUMMARY"
+          else
+            {
+              echo "### This pull request narrows the catalogue"
+              echo
+              echo "A removed or altered rule means something that used to be detected"
+              echo "no longer is, and the failure mode is silent — the report still says"
+              echo "it scanned everything. That can be the right call, but it needs a"
+              echo "reviewer to say so out loud in the pull request."
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi

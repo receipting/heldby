@@ -1,0 +1,70 @@
+id: gateways
+version: gateways.v1
+
+# Gateways and proxies that sit between an application and a model vendor.
+#
+# These are catalogued for one reason beyond inventory: if a repo uses a gateway
+# anywhere, then a direct provider call somewhere else is a BYPASS. That gap —
+# a call the company believes is being logged, metered and rate-limited but is
+# not — is one of the more valuable things this tool reports, and it is invisible
+# unless both halves are catalogued.
+#
+# A gateway is not a control. It observes and meters; it does not stand between
+# the model's output and an effect. Never credit one in `held by`.
+
+rules:
+  - id: gateway.cloudflare-ai
+    kind: model
+    match: { url_literal: ["gateway.ai.cloudflare.com"] }
+    note: Cloudflare AI Gateway. The `cf-aig-metadata` header usually carries a process label worth reading.
+
+  - id: gateway.openrouter
+    kind: model
+    match: { url_literal: ["openrouter.ai/api"] }
+
+  - id: gateway.portkey
+    kind: model
+    imports: { ts: ["portkey-ai"], py: ["portkey_ai"] }
+    registry: { npm: ["portkey-ai"], pypi: ["portkey-ai"] }
+    match: { url_literal: ["api.portkey.ai"], symbol: ["Portkey"] }
+
+  - id: gateway.helicone
+    kind: model
+    match: { url_literal: ["oai.helicone.ai", "anthropic.helicone.ai", "gateway.helicone.ai"] }
+
+  - id: gateway.braintrust
+    kind: model
+    imports: { ts: ["braintrust"], py: ["braintrust"] }
+    registry: { npm: ["braintrust"], pypi: ["braintrust"] }
+    match: { url_literal: ["api.braintrust.dev", "braintrustproxy.com"] }
+
+  - id: gateway.vercel-ai
+    kind: model
+    imports: { ts: ["@ai-sdk/gateway"] }
+    registry: { npm: ["@ai-sdk/gateway"] }
+    match: { url_literal: ["ai-gateway.vercel.sh"], symbol: ["gateway"] }
+
+  - id: gateway.litellm-proxy
+    kind: model
+    match: { url_literal: ["litellm", "/litellm/"] }
+    note: >
+      Weak by design — "litellm" also appears in the library import. Reported as
+      a candidate; the classify pass decides whether it is a proxy host or a
+      library reference.
+
+  - id: gateway.langfuse
+    kind: model
+    imports: { ts: ["langfuse"], py: ["langfuse"] }
+    registry: { npm: ["langfuse"], pypi: ["langfuse"] }
+    match: { url_literal: ["cloud.langfuse.com"] }
+    note: Observability rather than a proxy, but it names the processes, which is what the register wants.
+
+  - id: gateway.custom-base-url
+    kind: model
+    match: { member: ["baseURL", "base_url", "apiBase", "api_base", "azure_endpoint"] }
+    note: >
+      The sneaky case, and the reason this rule is deliberately noisy. An OpenAI
+      client pointed at another host is a different vendor entirely, and the base
+      URL is the only tell. Fires on the assignment wherever it appears —
+      including inside a provider registry, which is where it usually lives
+      rather than at any call site.

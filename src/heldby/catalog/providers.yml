@@ -1,0 +1,538 @@
+id: providers
+version: providers.v1
+
+# Model call sites and configured providers.
+#
+# Adding a rule: see catalog/README.md. Two things to know before you do.
+#
+# `imports` is what appears in an import statement; `registry` is what a package
+# index knows the distribution as. They differ often enough that conflating them
+# is a bug — the Google SDK is `@google/genai` on npm, `google-genai` on PyPI,
+# and `google.genai` in a Python import.
+#
+# Member chains are matched case-folded with separators stripped, so one rule
+# covers `generateContent` and `generate_content`. Do not add both.
+
+rules:
+  # --- Anthropic ------------------------------------------------------------
+  - id: anthropic.messages
+    kind: model
+    imports: { ts: ["@anthropic-ai/sdk"], py: ["anthropic"] }
+    registry: { npm: ["@anthropic-ai/sdk"], pypi: ["anthropic"] }
+    match: { member: ["messages", "create"] }
+    model_arg: model
+    note: Anthropic Messages API. Identical member chain in both SDKs.
+
+  - id: anthropic.messages.stream
+    kind: model
+    imports: { ts: ["@anthropic-ai/sdk"], py: ["anthropic"] }
+    registry: { npm: ["@anthropic-ai/sdk"], pypi: ["anthropic"] }
+    match: { member: ["messages", "stream"] }
+    model_arg: model
+
+  - id: anthropic.beta.messages
+    kind: model
+    imports: { ts: ["@anthropic-ai/sdk"], py: ["anthropic"] }
+    registry: { npm: ["@anthropic-ai/sdk"], pypi: ["anthropic"] }
+    match: { member: ["beta", "messages", "create"] }
+    model_arg: model
+
+  - id: anthropic.vertex
+    kind: model
+    imports: { ts: ["@anthropic-ai/vertex-sdk"], py: ["anthropic"] }
+    registry: { npm: ["@anthropic-ai/vertex-sdk"], pypi: ["anthropic"] }
+    match: { symbol: ["AnthropicVertex", "AsyncAnthropicVertex"], construct: true }
+
+  - id: anthropic.bedrock
+    kind: model
+    imports: { ts: ["@anthropic-ai/bedrock-sdk"], py: ["anthropic"] }
+    registry: { npm: ["@anthropic-ai/bedrock-sdk"], pypi: ["anthropic"] }
+    match: { symbol: ["AnthropicBedrock", "AsyncAnthropicBedrock"], construct: true }
+
+  - id: anthropic.client.construct
+    kind: model
+    imports: { ts: ["@anthropic-ai/sdk"], py: ["anthropic"] }
+    registry: { npm: ["@anthropic-ai/sdk"], pypi: ["anthropic"] }
+    match: { symbol: ["Anthropic", "AsyncAnthropic"], construct: true }
+    note: >
+      Constructing the client is catalogued separately from calling it, because a
+      factory that builds a client in one module and hands it to another leaves no
+      call site in the module that owns the feature. That shape is why the
+      call-graph predecessor of this tool could not see an in-app assistant.
+
+  - id: anthropic.agent-sdk
+    kind: model
+    imports: { ts: ["@anthropic-ai/claude-agent-sdk"], py: ["claude_agent_sdk"] }
+    registry: { npm: ["@anthropic-ai/claude-agent-sdk"], pypi: ["claude-agent-sdk"] }
+    match: { symbol: ["query", "ClaudeSDKClient"] }
+    note: >
+      One call drives a full agentic session with tool use and file access. This
+      catches the entry point, not what happens inside it — say so in the register.
+
+  # --- OpenAI ---------------------------------------------------------------
+  - id: openai.chat
+    kind: model
+    imports: { ts: ["openai"], py: ["openai"] }
+    registry: { npm: ["openai"], pypi: ["openai"] }
+    match: { member: ["chat", "completions", "create"] }
+    model_arg: model
+
+  - id: openai.responses
+    kind: model
+    imports: { ts: ["openai"], py: ["openai"] }
+    registry: { npm: ["openai"], pypi: ["openai"] }
+    match: { member: ["responses", "create"] }
+    model_arg: model
+
+  - id: openai.embeddings
+    kind: model
+    imports: { ts: ["openai"], py: ["openai"] }
+    registry: { npm: ["openai"], pypi: ["openai"] }
+    match: { member: ["embeddings", "create"] }
+    note: An embedding is a model call. Vector search built on it is a Read-class AI use.
+
+  - id: openai.moderations
+    kind: model
+    imports: { ts: ["openai"], py: ["openai"] }
+    registry: { npm: ["openai"], pypi: ["openai"] }
+    match: { member: ["moderations", "create"] }
+    note: >
+      Moderation is itself a model, not a deterministic gate. A register that
+      credits it as a control is claiming a model holds a model.
+
+  - id: openai.client.construct
+    kind: model
+    imports: { ts: ["openai"], py: ["openai"] }
+    registry: { npm: ["openai"], pypi: ["openai"] }
+    match: { symbol: ["OpenAI", "AsyncOpenAI", "AzureOpenAI", "AsyncAzureOpenAI"], construct: true }
+    note: >
+      Constructing an OpenAI client says almost nothing about which vendor is
+      being called — see the `provider.*` rules below. Report the base URL, not
+      the import.
+
+  - id: openai.agents-sdk
+    kind: model
+    imports: { ts: ["@openai/agents"], py: ["agents"] }
+    registry: { npm: ["@openai/agents"], pypi: ["openai-agents"] }
+    match: { symbol: ["Agent", "Runner", "run"] }
+
+  # --- Google ---------------------------------------------------------------
+  - id: google.genai
+    kind: model
+    imports: { ts: ["@google/genai"], py: ["google.genai"] }
+    registry: { npm: ["@google/genai"], pypi: ["google-genai"] }
+    match: { member: ["generateContent"] }
+    model_arg: model
+    note: The current unified Google GenAI SDK. Matches `generate_content` too.
+
+  - id: google.genai.stream
+    kind: model
+    imports: { ts: ["@google/genai"], py: ["google.genai"] }
+    registry: { npm: ["@google/genai"], pypi: ["google-genai"] }
+    match: { member: ["generateContentStream"] }
+    model_arg: model
+
+  - id: google.generative-ai.legacy
+    kind: model
+    deprecated: true
+    imports: { ts: ["@google/generative-ai"], py: ["google.generativeai"] }
+    registry: { npm: ["@google/generative-ai"], pypi: ["google-generativeai"] }
+    match: { member: ["generateContent", "generateContentStream"] }
+    note: >
+      Superseded by @google/genai and kept deliberately. A stale name in this
+      catalogue's predecessor made a 106k-star shell-executing agent report "no
+      model roots detected", which is why rules are marked deprecated and never
+      deleted.
+
+  - id: google.adk
+    kind: model
+    imports: { py: ["google.adk"] }
+    registry: { pypi: ["google-adk"] }
+    match: { symbol: ["Agent", "LlmAgent", "Runner"] }
+
+  # --- AWS Bedrock ----------------------------------------------------------
+  - id: bedrock.invoke
+    kind: model
+    imports: { ts: ["@aws-sdk/client-bedrock-runtime"], py: ["boto3", "aioboto3"] }
+    registry: { npm: ["@aws-sdk/client-bedrock-runtime"], pypi: ["boto3"] }
+    match:
+      symbol: ["InvokeModelCommand", "ConverseCommand", "ConverseStreamCommand", "InvokeModelWithResponseStreamCommand"]
+    note: >
+      In Python this arrives as boto3.client("bedrock-runtime"), which no import
+      match can distinguish from any other AWS call — the service string is the
+      tell, so `provider.bedrock.service` below carries it.
+
+  - id: provider.bedrock.service
+    kind: model
+    imports: { py: ["boto3", "aioboto3"] }
+    registry: { pypi: ["boto3"] }
+    match: { url_literal: ["bedrock-runtime"] }
+    note: >
+      boto3's service name given as a bare string. Matched as a literal because
+      that string is the only thing separating a model call from an S3 call.
+
+  # --- other first-party SDKs ----------------------------------------------
+  - id: mistral.chat
+    kind: model
+    imports: { ts: ["@mistralai/mistralai"], py: ["mistralai"] }
+    registry: { npm: ["@mistralai/mistralai"], pypi: ["mistralai"] }
+    match: { member: ["chat", "complete"], symbol: ["Mistral"] }
+
+  - id: cohere.chat
+    kind: model
+    imports: { ts: ["cohere-ai"], py: ["cohere"] }
+    registry: { npm: ["cohere-ai"], pypi: ["cohere"] }
+    match: { member: ["chat"], symbol: ["ClientV2", "CohereClient"] }
+
+  - id: groq.chat
+    kind: model
+    imports: { ts: ["groq-sdk"], py: ["groq"] }
+    registry: { npm: ["groq-sdk"], pypi: ["groq"] }
+    match: { member: ["chat", "completions", "create"], symbol: ["Groq"] }
+
+  - id: xai.chat
+    kind: model
+    imports: { py: ["xai_sdk"] }
+    registry: { pypi: ["xai-sdk"] }
+    match: { symbol: ["Client"] }
+
+  - id: together.chat
+    kind: model
+    imports: { ts: ["together-ai"], py: ["together"] }
+    registry: { npm: ["together-ai"], pypi: ["together"] }
+    match: { member: ["chat", "completions", "create"], symbol: ["Together"] }
+
+  - id: fireworks.chat
+    kind: model
+    imports: { py: ["fireworks"] }
+    registry: { pypi: ["fireworks-ai"] }
+    match: { symbol: ["LLM", "ChatCompletion"] }
+
+  - id: replicate.run
+    kind: model
+    imports: { ts: ["replicate"], py: ["replicate"] }
+    registry: { npm: ["replicate"], pypi: ["replicate"] }
+    match: { member: ["run", "stream"] }
+
+  - id: ollama.chat
+    kind: model
+    imports: { ts: ["ollama"], py: ["ollama"] }
+    registry: { npm: ["ollama"], pypi: ["ollama"] }
+    match: { member: ["chat", "generate", "embed"] }
+
+  - id: huggingface.inference
+    kind: model
+    imports: { ts: ["@huggingface/inference"], py: ["huggingface_hub"] }
+    registry: { npm: ["@huggingface/inference"], pypi: ["huggingface-hub"] }
+    match: { symbol: ["InferenceClient", "AsyncInferenceClient"] }
+
+  - id: cloudflare.workers-ai
+    kind: model
+    match: { member: ["AI", "run"], url_literal: ["@cf/"] }
+    note: >
+      A platform binding — env.AI.run(). There is no package to import, so this
+      matches the member chain and the model-id prefix. Its predecessor gate
+      reported "ok over 110 files" while a worker called env.AI with a Moonshot
+      model, because it only knew about packages. A gate that cannot see a whole
+      provider is not a claim you can put in front of a customer.
+
+  # --- frameworks: JS/TS ----------------------------------------------------
+  - id: aisdk.generate
+    kind: model
+    imports: { ts: ["ai"] }
+    registry: { npm: ["ai"] }
+    match:
+      symbol: ["generateText", "generateObject", "streamText", "streamObject", "embed", "embedMany", "streamUI", "rerank"]
+    note: Vercel AI SDK.
+
+  - id: aisdk.providers
+    kind: model
+    imports:
+      ts: ["@ai-sdk/openai", "@ai-sdk/anthropic", "@ai-sdk/google", "@ai-sdk/amazon-bedrock",
+           "@ai-sdk/mistral", "@ai-sdk/cohere", "@ai-sdk/groq", "@ai-sdk/xai",
+           "@ai-sdk/deepseek", "@ai-sdk/togetherai", "@ai-sdk/fireworks", "@ai-sdk/perplexity",
+           "@ai-sdk/azure", "@ai-sdk/openai-compatible", "@ai-sdk/replicate"]
+    registry:
+      npm: ["@ai-sdk/openai", "@ai-sdk/anthropic", "@ai-sdk/google", "@ai-sdk/amazon-bedrock",
+            "@ai-sdk/mistral", "@ai-sdk/cohere", "@ai-sdk/groq", "@ai-sdk/xai",
+            "@ai-sdk/deepseek", "@ai-sdk/togetherai", "@ai-sdk/fireworks", "@ai-sdk/perplexity",
+            "@ai-sdk/azure", "@ai-sdk/openai-compatible", "@ai-sdk/replicate"]
+    match: { symbol: ["openai", "anthropic", "google", "bedrock", "mistral", "cohere", "groq", "xai", "deepseek", "perplexity", "azure", "createOpenAICompatible"] }
+    note: The provider chosen for an AI SDK call. Which one is named here is the vendor answer.
+
+  - id: mastra.agent
+    kind: model
+    imports: { ts: ["@mastra/core"] }
+    registry: { npm: ["@mastra/core"] }
+    match: { symbol: ["Agent", "Mastra"], construct: true }
+
+  - id: genkit.generate
+    kind: model
+    imports: { ts: ["genkit"] }
+    registry: { npm: ["genkit"] }
+    match: { symbol: ["genkit"], member: ["generate", "generateStream"] }
+
+  - id: instructor.js
+    kind: model
+    imports: { ts: ["@instructor-ai/instructor"] }
+    registry: { npm: ["@instructor-ai/instructor"] }
+    match: { symbol: ["Instructor"] }
+
+  - id: baml.client
+    kind: model
+    imports: { ts: ["@boundaryml/baml"], py: ["baml_client"] }
+    registry: { npm: ["@boundaryml/baml"], pypi: ["baml-py"] }
+    match: { symbol: ["b", "BamlClient"] }
+    note: >
+      BAML generates a typed client, so the call site looks like ordinary code
+      (`b.ExtractInvoice(...)`). The import is the only reliable tell.
+
+  # --- frameworks: LangChain family ---------------------------------------
+  - id: langchain.chat.models
+    kind: model
+    imports:
+      ts: ["@langchain/openai", "@langchain/anthropic", "@langchain/google-genai",
+           "@langchain/google-vertexai", "@langchain/aws", "@langchain/groq",
+           "@langchain/mistralai", "@langchain/cohere", "@langchain/ollama",
+           "@langchain/community", "langchain"]
+      py: ["langchain_openai", "langchain_anthropic", "langchain_google_genai",
+           "langchain_google_vertexai", "langchain_aws", "langchain_groq",
+           "langchain_mistralai", "langchain_cohere", "langchain_ollama",
+           "langchain_deepseek", "langchain_community", "langchain"]
+    registry:
+      npm: ["@langchain/openai", "@langchain/anthropic", "@langchain/google-genai",
+            "@langchain/aws", "@langchain/groq", "@langchain/mistralai",
+            "@langchain/cohere", "@langchain/ollama", "@langchain/community", "langchain"]
+      pypi: ["langchain-openai", "langchain-anthropic", "langchain-google-genai",
+             "langchain-google-vertexai", "langchain-aws", "langchain-groq",
+             "langchain-mistralai", "langchain-cohere", "langchain-ollama",
+             "langchain-deepseek", "langchain-community", "langchain"]
+    match:
+      symbol: ["ChatOpenAI", "AzureChatOpenAI", "ChatAnthropic", "ChatGoogleGenerativeAI",
+               "ChatVertexAI", "ChatBedrock", "ChatBedrockConverse", "ChatGroq",
+               "ChatMistralAI", "ChatCohere", "ChatOllama", "ChatDeepSeek",
+               "ChatFireworks", "ChatTogetherAI", "ChatXAI", "ChatPerplexity",
+               "OpenAI", "OpenAIEmbeddings", "init_chat_model"]
+    note: >
+      The Python module names differ from the npm names by more than a separator
+      (`langchain_anthropic` vs `@langchain/anthropic`), which is why imports are
+      listed per ecosystem. A catalogue carrying only npm names reports "no AI"
+      over any Python LangChain codebase.
+
+  - id: langchain.invoke
+    kind: model
+    imports: { ts: ["@langchain/core"], py: ["langchain_core"] }
+    registry: { npm: ["@langchain/core"], pypi: ["langchain-core"] }
+    match: { member: ["invoke", "ainvoke", "stream", "astream", "batch", "abatch"] }
+    note: >
+      Runnable.invoke runs the composed chain, model included. Deliberately
+      over-approximate: it fires on any invoke, including chains with no model.
+      Report it as a candidate and let the classify pass read the code — a
+      wrongly-cleared site hides exactly the risk this tool exists to find.
+
+  - id: langchain.structured-output
+    kind: model
+    imports: { ts: ["@langchain/core"], py: ["langchain_core"] }
+    registry: { npm: ["@langchain/core"], pypi: ["langchain-core"] }
+    match: { member: ["withStructuredOutput", "bindTools"] }
+    note: >
+      Binding a schema or tools to a model. Worth its own rule because the
+      binding site is often the only place the model is named, and because a
+      fallback to free text when a provider cannot do structured output silently
+      removes the schema guarantee — that belongs in the register's `held by`.
+
+  - id: langgraph.graph
+    kind: model
+    imports: { ts: ["@langchain/langgraph"], py: ["langgraph"] }
+    registry: { npm: ["@langchain/langgraph"], pypi: ["langgraph"] }
+    match: { symbol: ["StateGraph", "create_react_agent", "createReactAgent", "MessageGraph"] }
+    note: >
+      Node registration is the best available list of an agent app's real
+      processes. One shared invoke helper can serve a dozen agents, so the node
+      names are the register's rows, not the call site.
+
+  # --- frameworks: Python -------------------------------------------------
+  - id: pydantic-ai.agent
+    kind: model
+    imports: { py: ["pydantic_ai"] }
+    registry: { pypi: ["pydantic-ai", "pydantic-ai-slim"] }
+    match: { symbol: ["Agent"], member: ["run", "run_sync", "run_stream"] }
+
+  - id: instructor.py
+    kind: model
+    imports: { py: ["instructor"] }
+    registry: { pypi: ["instructor"] }
+    match: { symbol: ["from_openai", "from_anthropic", "from_litellm", "patch"] }
+
+  - id: dspy.module
+    kind: model
+    imports: { py: ["dspy"] }
+    registry: { pypi: ["dspy", "dspy-ai"] }
+    match: { symbol: ["Predict", "ChainOfThought", "ReAct", "LM"] }
+
+  - id: haystack.generator
+    kind: model
+    imports: { py: ["haystack", "haystack_integrations"] }
+    registry: { pypi: ["haystack-ai"] }
+    match: { symbol: ["OpenAIGenerator", "OpenAIChatGenerator", "AnthropicChatGenerator", "Pipeline"] }
+
+  - id: llamaindex.llm
+    kind: model
+    imports:
+      ts: ["llamaindex", "@llamaindex/openai", "@llamaindex/anthropic"]
+      py: ["llama_index"]
+    registry:
+      npm: ["llamaindex", "@llamaindex/openai", "@llamaindex/anthropic"]
+      pypi: ["llama-index", "llama-index-core"]
+    match: { member: ["chat", "complete", "achat"], symbol: ["OpenAI", "Anthropic", "VectorStoreIndex"] }
+
+  - id: crewai.crew
+    kind: model
+    imports: { py: ["crewai"] }
+    registry: { pypi: ["crewai"] }
+    match: { symbol: ["Agent", "Crew", "Task"], member: ["kickoff"] }
+
+  - id: autogen.agent
+    kind: model
+    imports: { py: ["autogen", "autogen_agentchat", "autogen_ext"] }
+    registry: { pypi: ["pyautogen", "autogen-agentchat", "autogen-ext"] }
+    match: { symbol: ["AssistantAgent", "ConversableAgent", "UserProxyAgent", "RoundRobinGroupChat"] }
+
+  - id: agno.agent
+    kind: model
+    imports: { py: ["agno"] }
+    registry: { pypi: ["agno"] }
+    match: { symbol: ["Agent", "Team"] }
+
+  - id: smolagents.agent
+    kind: model
+    imports: { py: ["smolagents"] }
+    registry: { pypi: ["smolagents"] }
+    match: { symbol: ["CodeAgent", "ToolCallingAgent", "InferenceClientModel"] }
+    note: A CodeAgent writes and runs Python by design. Pair this with the execute-code sinks.
+
+  - id: strands.agent
+    kind: model
+    imports: { py: ["strands"] }
+    registry: { pypi: ["strands-agents"] }
+    match: { symbol: ["Agent"] }
+
+  - id: semantic-kernel.kernel
+    kind: model
+    imports: { py: ["semantic_kernel"] }
+    registry: { pypi: ["semantic-kernel"] }
+    match: { symbol: ["Kernel", "ChatCompletionAgent"] }
+
+  - id: litellm.completion
+    kind: model
+    imports: { py: ["litellm"] }
+    registry: { pypi: ["litellm"] }
+    match: { symbol: ["completion", "acompletion", "embedding", "Router"] }
+    note: >
+      A gateway used as a library. Whichever vendor it reaches is chosen by the
+      model string at the call site, so the vendor is a runtime value.
+
+  # --- model calls over hand-rolled HTTP -----------------------------------
+  # Path-based and host-independent. These catch proxies, self-hosted servers and
+  # gateways that no import match can see, and they are how a great deal of real
+  # AI ships.
+  - id: llm.http.chat-completions
+    kind: model
+    match: { url_contains: ["/chat/completions"] }
+    note: >
+      An OpenAI-compatible chat endpoint, matched by path so the host does not
+      matter. Catches vLLM, LM Studio, OpenRouter, Together, Groq, Azure, Qwen
+      and anything else speaking the same protocol.
+
+  - id: llm.http.messages
+    kind: model
+    match: { url_contains: ["/v1/messages"] }
+    note: Anthropic Messages API by path, host-independent.
+
+  - id: llm.http.responses
+    kind: model
+    match: { url_contains: ["/v1/responses"] }
+
+  - id: llm.http.generate-content
+    kind: model
+    match: { url_contains: [":generateContent", ":streamGenerateContent"] }
+    note: Google GenAI REST by path.
+
+  - id: llm.http.embeddings
+    kind: model
+    match: { url_contains: ["/v1/embeddings", "/embeddings"] }
+
+  # --- configured providers ------------------------------------------------
+  # A base URL sitting in a config table, not at a call site. Fourteen vendors
+  # can hide behind one `openai` import and the base URL is the only tell, so
+  # these match the literal anywhere in the source.
+  - id: provider.openai
+    kind: model
+    match: { url_literal: ["api.openai.com"] }
+  - id: provider.anthropic
+    kind: model
+    match: { url_literal: ["api.anthropic.com"] }
+  - id: provider.google
+    kind: model
+    match: { url_literal: ["generativelanguage.googleapis.com", "aiplatform.googleapis.com"] }
+  - id: provider.azure-openai
+    kind: model
+    match: { url_literal: ["openai.azure.com", "cognitiveservices.azure.com"] }
+  - id: provider.mistral
+    kind: model
+    match: { url_literal: ["api.mistral.ai"] }
+  - id: provider.groq
+    kind: model
+    match: { url_literal: ["api.groq.com"] }
+  - id: provider.deepseek
+    kind: model
+    match: { url_literal: ["api.deepseek.com"] }
+  - id: provider.xai
+    kind: model
+    match: { url_literal: ["api.x.ai"] }
+  - id: provider.perplexity
+    kind: model
+    match: { url_literal: ["api.perplexity.ai"] }
+  - id: provider.together
+    kind: model
+    match: { url_literal: ["api.together.xyz", "api.together.ai"] }
+  - id: provider.fireworks
+    kind: model
+    match: { url_literal: ["api.fireworks.ai"] }
+  - id: provider.moonshot
+    kind: model
+    match: { url_literal: ["api.moonshot.ai", "api.moonshot.cn"] }
+  - id: provider.qwen
+    kind: model
+    match: { url_literal: ["dashscope.aliyuncs.com", "dashscope-intl.aliyuncs.com"] }
+  - id: provider.zhipu
+    kind: model
+    match: { url_literal: ["api.z.ai", "open.bigmodel.cn"] }
+  - id: provider.minimax
+    kind: model
+    match: { url_literal: ["api.minimax.io", "api.minimaxi.com"] }
+  - id: provider.nvidia
+    kind: model
+    match: { url_literal: ["integrate.api.nvidia.com"] }
+  - id: provider.ollama.local
+    kind: model
+    match: { url_literal: ["localhost:11434", "127.0.0.1:11434"] }
+  - id: provider.huggingface
+    kind: model
+    match: { url_literal: ["api-inference.huggingface.co", "router.huggingface.co"] }
+  - id: provider.bedrock.host
+    kind: model
+    match: { url_literal: ["bedrock-runtime."] }
+
+  # --- API keys as evidence ------------------------------------------------
+  # An env var name is weaker evidence than a call site and is reported as such,
+  # but a key with no call site is a loose end worth a line in the register.
+  - id: env.provider-keys
+    kind: env
+    match:
+      env: ["OPENAI_API_KEY", "ANTHROPIC_API_KEY", "GOOGLE_API_KEY", "GEMINI_API_KEY",
+            "AZURE_OPENAI_API_KEY", "MISTRAL_API_KEY", "COHERE_API_KEY", "GROQ_API_KEY",
+            "XAI_API_KEY", "DEEPSEEK_API_KEY", "TOGETHER_API_KEY", "FIREWORKS_API_KEY",
+            "PERPLEXITY_API_KEY", "REPLICATE_API_TOKEN", "HF_TOKEN", "OPENROUTER_API_KEY",
+            "MOONSHOT_API_KEY", "DASHSCOPE_API_KEY", "MINIMAX_API_KEY", "NVIDIA_API_KEY"]
+    trifecta_role: secret-source

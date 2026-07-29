@@ -1,0 +1,320 @@
+id: sinks
+version: sinks.v1
+
+# Protected actions — the things worth protecting a model's output from reaching.
+#
+# `payload_arg` names which argument a model would have to control for the call to
+# be dangerous. `exec(cmd)` is argument 0; `write_file(path, body)` is argument 1.
+# Reachable is not the same as drivable, and this field is the difference.
+#
+# `remedies` is a CLOSED vocabulary (see schema.py). A catalogue entry that could
+# carry free advice would become a style guide.
+#
+# Two of the twelve protected actions have no signature at all and never will:
+# `decide-about-person` (credit, hiring, claims, moderation) and most instances of
+# `publish-public` are judgements about what a call means, not what it is. They
+# come from the classify pass reading the code. A register that only contains what
+# a scanner can pattern-match is not a register of the AI in a system; it is a
+# register of the AI a scanner recognises.
+
+rules:
+  # --- execute code ---------------------------------------------------------
+  - id: exec.node.child-process
+    action: execute-code
+    kind: io
+    severity: critical
+    payload_arg: 0
+    remedies: [literal-argv, constant-payload, sandbox]
+    imports: { ts: ["child_process", "node:child_process"] }
+    match: { symbol: ["exec", "execSync", "execFile", "execFileSync", "spawn", "spawnSync", "fork"] }
+
+  - id: exec.py.subprocess
+    action: execute-code
+    kind: io
+    severity: critical
+    payload_arg: 0
+    remedies: [literal-argv, constant-payload, sandbox]
+    imports: { py: ["subprocess", "os"] }
+    match: { symbol: ["run", "Popen", "call", "check_output", "check_call", "system", "popen"] }
+    note: >
+      subprocess.run and os.system. Deliberately over-approximate: `run` is a
+      common method name, so the classify pass confirms. shell=True is the
+      detail that matters and only reading the call shows it.
+
+  - id: exec.eval
+    action: execute-code
+    kind: io
+    severity: critical
+    payload_arg: 0
+    remedies: [constant-payload, sandbox]
+    match: { ambient: "eval", symbol: ["eval", "exec", "compile"] }
+    note: JS eval and Python eval/exec/compile.
+
+  - id: exec.js.function-ctor
+    action: execute-code
+    kind: io
+    severity: critical
+    remedies: [constant-payload, sandbox]
+    match: { ambient: "Function", construct: true }
+    note: new Function(code) compiles arbitrary code.
+
+  - id: exec.node.vm
+    action: execute-code
+    kind: io
+    severity: critical
+    remedies: [constant-payload]
+    imports: { ts: ["vm", "node:vm", "vm2", "isolated-vm"] }
+    registry: { npm: ["vm2", "isolated-vm"] }
+    match: { symbol: ["runInThisContext", "runInContext", "runInNewContext", "compileFunction", "Script", "Isolate"] }
+
+  - id: exec.py.dynamic-import
+    action: execute-code
+    kind: io
+    severity: critical
+    remedies: [constant-payload]
+    imports: { py: ["importlib"] }
+    match: { symbol: ["import_module", "exec_module", "__import__"] }
+
+  - id: exec.sandbox.e2b
+    action: execute-code-sandboxed
+    kind: io
+    severity: high
+    payload_arg: 0
+    remedies: [literal-argv, constant-payload]
+    imports: { ts: ["e2b", "@e2b/code-interpreter"], py: ["e2b", "e2b_code_interpreter"] }
+    registry: { npm: ["e2b", "@e2b/code-interpreter"], pypi: ["e2b", "e2b-code-interpreter"] }
+    match: { member: ["runCode", "run_code", "commands", "run"] }
+    note: >
+      A sandbox is not credited as a gate — it is a different action with a
+      smaller blast radius. Say which one the register means.
+
+  - id: exec.sandbox.modal
+    action: execute-code-sandboxed
+    kind: io
+    severity: high
+    imports: { py: ["modal"] }
+    registry: { pypi: ["modal"] }
+    match: { symbol: ["Sandbox"], member: ["exec"] }
+
+  - id: exec.sandbox.daytona
+    action: execute-code-sandboxed
+    kind: io
+    severity: high
+    imports: { ts: ["@daytona/sdk", "@daytonaio/sdk"], py: ["daytona"] }
+    registry: { npm: ["@daytona/sdk", "@daytonaio/sdk"], pypi: ["daytona"] }
+    match: { member: ["codeRun", "code_run"] }
+    note: >
+      @daytonaio/sdk was renamed to @daytona/sdk. Both stay listed: the old name
+      keeps matching because repos still on it exist, which is the point of a
+      grow-only catalogue. Found by `catalog --check-registries`, not by hand.
+
+  # --- move money ----------------------------------------------------------
+  - id: money.stripe
+    action: move-money
+    kind: io
+    severity: critical
+    imports: { ts: ["stripe"], py: ["stripe"] }
+    registry: { npm: ["stripe"], pypi: ["stripe"] }
+    match: { member: ["paymentIntents", "charges", "transfers", "payouts", "refunds"] }
+
+  - id: money.paypal
+    action: move-money
+    kind: io
+    severity: critical
+    imports:
+      ts: ["@paypal/paypal-server-sdk", "@paypal/payouts-sdk", "@paypal/checkout-server-sdk"]
+      py: ["paypalrestsdk"]
+    registry:
+      npm: ["@paypal/paypal-server-sdk", "@paypal/payouts-sdk", "@paypal/checkout-server-sdk"]
+      pypi: ["paypalrestsdk"]
+    match:
+      symbol: ["PayoutsPostRequest", "OrdersCaptureRequest", "Payout",
+               "PaymentsController", "OrdersController"]
+    note: >
+      @paypal/checkout-server-sdk was superseded by @paypal/paypal-server-sdk.
+      All three names stay catalogued.
+
+  - id: money.plaid
+    action: move-money
+    kind: io
+    severity: critical
+    imports: { ts: ["plaid"], py: ["plaid"] }
+    registry: { npm: ["plaid"], pypi: ["plaid-python"] }
+    match: { member: ["transferCreate", "transfer_create"] }
+
+  - id: money.brokers
+    action: move-money
+    kind: io
+    severity: critical
+    imports:
+      ts: ["@alpacahq/alpaca-trade-api", "ccxt"]
+      py: ["alpaca", "alpaca_trade_api", "ib_insync", "ibapi", "ccxt", "robin_stocks"]
+    registry:
+      npm: ["@alpacahq/alpaca-trade-api", "ccxt"]
+      pypi: ["alpaca-py", "alpaca-trade-api", "ib-insync", "ibapi", "ccxt", "robin-stocks"]
+    match: { member: ["submitOrder", "submit_order", "placeOrder", "place_order", "createOrder", "create_order", "placeMarketOrder"] }
+    note: >
+      Order placement. Worth its own rule because AI trading tools are common and
+      the useful question about one is whether it can actually place an order or
+      only print a recommendation. Those are very different registers, and the
+      answer is usually the second — say so rather than implying the first.
+
+  - id: money.http
+    action: move-money
+    kind: io
+    severity: critical
+    match:
+      url_contains: ["api.stripe.com", "api.paypal.com", "api-m.paypal.com",
+                     "api.wise.com", "api.transferwise.com",
+                     "api.xero.com/api.xro/2.0/Payments",
+                     "api.xero.com/api.xro/2.0/BankTransactions"]
+    note: Payments over hand-rolled HTTP rather than an SDK — the common real-world shape.
+
+  # --- send a message to a third party -------------------------------------
+  - id: comms.email.sdk
+    action: external-comms
+    kind: io
+    severity: high
+    trifecta_role: external-comms
+    imports:
+      ts: ["nodemailer", "@sendgrid/mail", "resend", "postmark", "mailgun.js",
+           "@aws-sdk/client-ses", "@aws-sdk/client-sesv2"]
+      py: ["smtplib", "sendgrid", "resend", "postmarker", "mailgun", "boto3"]
+    registry:
+      npm: ["nodemailer", "@sendgrid/mail", "resend", "postmark", "mailgun.js",
+            "@aws-sdk/client-ses", "@aws-sdk/client-sesv2"]
+      pypi: ["sendgrid", "resend", "postmarker", "boto3"]
+    match:
+      member: ["sendMail", "send_message", "sendEmail", "send_email", "emails", "send", "sendMultiple"]
+      symbol: ["SendEmailCommand", "SendRawEmailCommand", "SMTP", "SMTP_SSL"]
+
+  - id: comms.chat.sdk
+    action: external-comms
+    kind: io
+    severity: high
+    trifecta_role: external-comms
+    imports:
+      ts: ["twilio", "@slack/web-api", "discord.js", "node-telegram-bot-api"]
+      py: ["twilio", "slack_sdk", "discord", "telegram"]
+    registry:
+      npm: ["twilio", "@slack/web-api", "discord.js", "node-telegram-bot-api"]
+      pypi: ["twilio", "slack-sdk", "discord.py", "python-telegram-bot"]
+    match: { member: ["messages", "create", "postMessage", "chat_postMessage", "sendMessage", "send_message"] }
+
+  - id: comms.http
+    action: external-comms
+    kind: io
+    severity: high
+    trifecta_role: external-comms
+    match:
+      url_contains: ["api.resend.com", "api.sendgrid.com", "api.mailgun.net",
+                     "api.postmarkapp.com", "api.twilio.com",
+                     "hooks.slack.com", "slack.com/api/chat.postMessage",
+                     "api.telegram.org", "discord.com/api/webhooks",
+                     "gmail.googleapis.com/gmail/v1/users/me/messages/send"]
+    note: >
+      Gmail send only. Creating a draft is deliberately NOT a send — a draft a
+      person still has to click is the human release the register wants to credit.
+
+  # --- write to a system of record -----------------------------------------
+  - id: records.accounting
+    action: alter-records
+    kind: io
+    severity: critical
+    imports: { ts: ["xero-node", "intuit-oauth"], py: ["xero_python", "quickbooks"] }
+    registry: { npm: ["xero-node", "intuit-oauth"], pypi: ["xero-python", "python-quickbooks"] }
+    match: { url_contains: ["api.xero.com/api.xro/2.0/Invoices", "api.xero.com/api.xro/2.0/Contacts", "quickbooks.api.intuit.com"] }
+
+  - id: records.crm
+    action: alter-records
+    kind: io
+    severity: high
+    imports: { ts: ["jsforce", "@hubspot/api-client"], py: ["simple_salesforce", "hubspot"] }
+    registry: { npm: ["jsforce", "@hubspot/api-client"], pypi: ["simple-salesforce", "hubspot-api-client"] }
+    match: { member: ["create", "update", "upsert"] }
+
+  - id: records.db.write
+    action: alter-records
+    kind: io
+    severity: high
+    imports:
+      ts: ["@prisma/client", "@supabase/supabase-js", "drizzle-orm", "pg", "mongodb", "mysql2"]
+      py: ["sqlalchemy", "psycopg", "psycopg2", "pymongo", "django"]
+    registry:
+      npm: ["@prisma/client", "@supabase/supabase-js", "drizzle-orm", "pg", "mongodb", "mysql2"]
+      pypi: ["sqlalchemy", "psycopg", "psycopg2-binary", "pymongo", "django"]
+    match: { member: ["insert", "update", "upsert", "createMany", "insertOne", "insertMany", "updateOne", "save", "commit", "execute"] }
+    note: >
+      Over-approximate on purpose. `execute` and `commit` catch raw SQL, which is
+      where model-authored writes usually land, at the cost of firing on reads too.
+
+  - id: records.delete
+    action: delete-data
+    kind: io
+    severity: critical
+    imports:
+      ts: ["@prisma/client", "@supabase/supabase-js", "drizzle-orm", "fs", "node:fs",
+           "@aws-sdk/client-s3"]
+      py: ["sqlalchemy", "shutil", "os", "pathlib", "boto3"]
+    registry: { npm: ["@prisma/client", "@supabase/supabase-js", "drizzle-orm", "@aws-sdk/client-s3"], pypi: ["sqlalchemy", "boto3"] }
+    match:
+      member: ["delete", "deleteMany", "deleteOne", "drop", "truncate", "unlink", "rmdir"]
+      symbol: ["rmtree", "rm", "rmSync", "unlink", "unlinkSync", "DeleteObjectCommand", "DeleteObjectsCommand"]
+
+  # --- write a file --------------------------------------------------------
+  - id: file.write
+    action: write-file
+    kind: io
+    severity: high
+    payload_arg: 1
+    remedies: [constant-payload]
+    imports: { ts: ["fs", "node:fs", "fs/promises", "node:fs/promises"], py: ["pathlib", "io", "os"] }
+    match:
+      symbol: ["writeFile", "writeFileSync", "appendFile", "appendFileSync", "createWriteStream",
+               "write_text", "write_bytes", "open"]
+    note: >
+      Model output written to the filesystem — what every coding agent does. Also
+      the quiet path by which a model's prose becomes durable state that a later
+      run reads back into a prompt, which fails the closed-loop test even though
+      nothing was ever sent anywhere.
+
+  # --- grant or change access ---------------------------------------------
+  - id: access.token-mint
+    action: grant-access
+    kind: io
+    severity: critical
+    imports: { ts: ["jsonwebtoken", "jose"], py: ["jwt", "authlib"] }
+    registry: { npm: ["jsonwebtoken", "jose"], pypi: ["pyjwt", "authlib"] }
+    match: { symbol: ["sign", "SignJWT", "encode"] }
+    note: Issues an authentication token.
+
+  - id: access.iam
+    action: grant-access
+    kind: io
+    severity: critical
+    imports: { ts: ["@aws-sdk/client-iam"], py: ["boto3"] }
+    registry: { npm: ["@aws-sdk/client-iam"], pypi: ["boto3"] }
+    match: { symbol: ["AttachRolePolicyCommand", "PutRolePolicyCommand", "CreateAccessKeyCommand", "AddUserToGroupCommand"] }
+
+  # --- deploy / publish ----------------------------------------------------
+  - id: deploy.infra
+    action: deploy
+    kind: io
+    severity: critical
+    imports: { ts: ["wrangler"], py: ["boto3"] }
+    match:
+      url_contains: ["api.cloudflare.com/client/v4/accounts", "api.vercel.com/v13/deployments"]
+      symbol: ["UpdateFunctionCodeCommand", "CreateStackCommand", "UpdateStackCommand"]
+
+  - id: publish.git
+    action: publish-public
+    kind: io
+    severity: high
+    imports: { ts: ["@octokit/rest", "octokit"], py: ["github", "PyGithub"] }
+    registry: { npm: ["@octokit/rest", "octokit"], pypi: ["PyGithub"] }
+    match:
+      member: ["createPullRequest", "merge", "createOrUpdateFileContents", "createRelease", "create_pull", "merge_pull"]
+      url_contains: ["api.github.com/repos"]
+    note: >
+      Merging a pull request or writing to a default branch ships code. An agent
+      that can do this unattended has a `deploy`-shaped reach through git.

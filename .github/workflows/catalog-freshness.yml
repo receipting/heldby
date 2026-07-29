@@ -1,0 +1,172 @@
+name: catalog-freshness
+
+# Keeps the detection surface current, unattended.
+#
+# Catalogue freshness is this tool's single point of failure. A renamed package
+# makes it report "no AI detected" over a codebase full of AI, and the failure is
+# silent — the report still claims it scanned everything. So this runs nightly
+# rather than waiting for someone to notice.
+#
+# Why it is safe to merge without a person reading it, which is the only
+# interesting question here:
+#
+#   The model proposes.  A script applies.  A gate verifies.
+#
+# The model never edits the catalogue. It writes a proposals JSON, and
+# scripts/apply_proposals.py decides what gets in: additive only, schema-valid,
+# and every proposed package name resolved against npm or PyPI. Then
+# `heldby catalog --assert-additive` independently re-checks that nothing was
+# removed or altered, and the full test suite runs against the fixtures.
+#
+# The invariant doing the work is that **the catalogue only grows**. A run that
+# can only add rules cannot reduce what the tool detects, so the worst outcome is
+# a useless rule rather than a new blind spot. Anything that would narrow the
+# catalogue fails the gate, gets labelled, and waits for a person — including a
+# rename, because the right shape for a rename is to add the new name and keep
+# the old one.
+#
+# The discovery step reads the open web, so web content is treated as data and
+# never as instructions. A hostile page's best case is one extra rule for a
+# package that genuinely exists, which still has to survive the fixtures and is
+# visible in the diff forever.
+
+on:
+  schedule:
+    - cron: "17 14 * * *" # 00:17 AEST
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: catalog-freshness
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      # 1 · Deterministic. No model, no network beyond the two registries.
+      #     Runs first so a rename is caught even if the discovery step is skipped.
+      - name: Resolve every catalogued package name
+        id: registries
+        continue-on-error: true
+        run: |
+          uv run heldby catalog --check-registries --json > /tmp/registries.json
+          uv run heldby catalog --check-registries | tee /tmp/registries.txt
+
+      # 2 · The only step that uses a model. Skipped, loudly, without a key —
+      #     a fork inherits this workflow and must not fail because of that.
+      - name: Discovery — new and changed frameworks
+        id: discovery
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          if [ -z "${ANTHROPIC_API_KEY:-}" ]; then
+            echo "no ANTHROPIC_API_KEY — discovery skipped, registry check still ran." \
+              | tee -a "$GITHUB_STEP_SUMMARY"
+            echo '{"proposals": []}' > /tmp/proposals.json
+            echo "Discovery skipped: no API key configured." > /tmp/summary.md
+            exit 0
+          fi
+          npm install -g @anthropic-ai/claude-code
+          # The prompt is a file in the repo, reviewable in its own right.
+          claude -p "$(cat .github/prompts/catalog-discovery.md)" \
+            --allowedTools "Read,Write,Bash,WebSearch,WebFetch" \
+            > /tmp/claude.log 2>&1 || true
+          test -f /tmp/proposals.json || echo '{"proposals": []}' > /tmp/proposals.json
+          test -f /tmp/summary.md || echo "Discovery produced no summary." > /tmp/summary.md
+
+      # 3 · Deterministic gate one. Additive only, schema-valid, packages resolve.
+      - name: Apply proposals
+        run: uv run python scripts/apply_proposals.py /tmp/proposals.json | tee /tmp/applied.txt
+
+      - name: Anything to ship?
+        id: changed
+        run: |
+          if git diff --quiet -- src/heldby/catalog/; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "Catalogue unchanged tonight." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      # 4 · Deterministic gate two, independent of the applier. Then the tests.
+      - name: Gate — additive, loads, and the fixtures still pass
+        id: gate
+        if: steps.changed.outputs.changed == 'true'
+        continue-on-error: true
+        run: |
+          uv run heldby catalog --assert-additive origin/main
+          uv run heldby catalog > /dev/null
+          uv run pytest -q
+
+      - name: Open the pull request
+        if: steps.changed.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GATE: ${{ steps.gate.outcome }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          BRANCH="catalog/freshness-$(date -u +%Y%m%d)-${RUN_ID}"
+          git config user.name "heldby-bot"
+          git config user.email "noreply@github.com"
+          git checkout -b "$BRANCH"
+          git add src/heldby/catalog/
+          git commit -m "catalog: nightly freshness sweep"
+          git push -u origin "$BRANCH"
+
+          # The body is assembled from files on disk, never interpolated into the
+          # shell — the summary is model output and is treated as untrusted text.
+          {
+            echo "Nightly catalogue freshness sweep."
+            echo
+            echo "## What the model proposed"
+            echo
+            cat /tmp/summary.md
+            echo
+            echo "## What was applied, and what was dropped"
+            echo
+            echo '```'
+            cat /tmp/applied.txt
+            echo '```'
+            echo
+            echo "## Registry resolution"
+            echo
+            echo '```'
+            cat /tmp/registries.txt
+            echo '```'
+            echo
+            echo "Gate outcome: ${GATE}."
+          } > /tmp/body.md
+
+          gh pr create \
+            --title "catalog: nightly freshness sweep" \
+            --body-file /tmp/body.md \
+            --head "$BRANCH" \
+            --base main
+
+          if [ "${GATE}" = "success" ]; then
+            gh pr merge "$BRANCH" --squash
+            echo "Merged: additive, catalogue loads, fixtures pass." >> "$GITHUB_STEP_SUMMARY"
+          else
+            gh pr edit "$BRANCH" --add-label "needs-review"
+            {
+              echo "### Left open for a person"
+              echo
+              echo "The change did not pass the additive gate, or the fixtures failed."
+              echo "A narrowing of the catalogue means something that used to be detected"
+              echo "no longer is, and that is not a decision to take unattended."
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
