@@ -75,28 +75,35 @@ jobs:
       #     has just been reading the open web run git push. It does not need one
       #     — step 1 already wrote the registry results to /tmp for it to read.
       #     No GITHUB_TOKEN in this step's environment either.
+      #     Discovery is allowed to fail. It is the one non-deterministic step, and
+      #     the registry check above may already have found a rename worth
+      #     shipping — killing the job over a slow model run would throw that away.
       - name: Discovery — new and changed frameworks
         id: discovery
+        continue-on-error: true
         timeout-minutes: 12
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
           set -uo pipefail
           echo '{"proposals": []}' > /tmp/proposals.json
+          : > /tmp/summary.md
           if [ -z "${ANTHROPIC_API_KEY:-}" ]; then
             echo "No ANTHROPIC_API_KEY: discovery skipped. The registry check still ran." \
               | tee -a "$GITHUB_STEP_SUMMARY" > /tmp/summary.md
             exit 0
           fi
           npm install -g @anthropic-ai/claude-code
-          # The prompt is a file in the repo, reviewable in its own right.
-          claude -p "$(cat .github/prompts/catalog-discovery.md)" \
-            --allowedTools Read Write WebSearch WebFetch \
-            --permission-mode acceptEdits \
-            > /tmp/claude.log 2>&1 || echo "discovery exited non-zero; treating as no proposals"
-          test -s /tmp/summary.md || echo "Discovery produced no summary." > /tmp/summary.md
-          echo "--- last 40 lines of the discovery log ---"
-          tail -40 /tmp/claude.log || true
+          # Its own budget, under the step timeout, so that overrunning still
+          # leaves a summary and a log behind. The step timeout is a hard kill:
+          # the first run hit it and destroyed the only evidence of why.
+          # Streamed through tee for the same reason — a swallowed log is no log.
+          timeout --signal=INT 480 \
+            claude -p "$(cat .github/prompts/catalog-discovery.md)" \
+              --allowedTools Read Write WebSearch WebFetch \
+              --permission-mode acceptEdits 2>&1 | tee /tmp/claude.log \
+            || echo "discovery did not finish inside its budget; continuing with no proposals"
+          test -s /tmp/summary.md || echo "Discovery produced no usable summary." > /tmp/summary.md
 
       # 3 · Deterministic gate one. Additive only, schema-valid, packages resolve.
       - name: Apply proposals
@@ -127,6 +134,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GATE: ${{ steps.gate.outcome }}
+          DISCOVERY: ${{ steps.discovery.outcome }}
           RUN_ID: ${{ github.run_id }}
         run: |
           set -euo pipefail
@@ -143,9 +151,11 @@ jobs:
           {
             echo "Nightly catalogue freshness sweep."
             echo
+            echo "Discovery step: ${DISCOVERY}. Gate: ${GATE}."
+            echo
             echo "## What the model proposed"
             echo
-            cat /tmp/summary.md
+            cat /tmp/summary.md 2>/dev/null || echo "_No summary was produced._"
             echo
             echo "## What was applied, and what was dropped"
             echo

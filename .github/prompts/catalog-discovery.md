@@ -50,6 +50,19 @@ both, do not infer one from the other.
 Member and symbol names are matched case-folded with separators stripped, so one entry
 covers `generateContent` and `generate_content`. Do not propose both.
 
+## Your budget
+
+You have **eight minutes**, after which you are killed and your work is discarded. So:
+
+- **At most 8 web searches**, and at most 10 proposals.
+- **Write `/tmp/proposals.json` and `/tmp/summary.md` early**, as soon as you have anything
+  at all, and rewrite them as you learn more. A file on disk at minute four is worth
+  infinitely more than a better answer you never got to write down.
+- Spend the budget on step 2 first. A successor package named in a deprecation message is
+  a certain win; a survey of the ecosystem is a maybe.
+- Do not research exhaustively. This runs every night, and whatever you miss tonight is
+  still there tomorrow.
+
 ## Rules you cannot break
 
 - **Only additions.** You may not remove a rule, and you may not change what an existing
