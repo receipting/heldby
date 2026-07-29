@@ -8,9 +8,10 @@ that is full of it — that has already happened once in this tool's history, to
 1. Read the current catalogue in `src/heldby/catalog/*.yml`. Note the schema, and read
    `src/heldby/schema.py` for the closed vocabularies. Every field you use must already
    exist there.
-2. Run `uv run heldby catalog --check-registries --json` and read the output. Anything
-   reported `deprecated` has a successor named in its message — that successor is the single
-   most valuable thing you can add tonight.
+2. Read `/tmp/registries.json`. It was already written for you, by resolving every
+   catalogued package name against npm and PyPI. Anything reported `deprecated` has a
+   successor named in its message — that successor is the single most valuable thing you can
+   add tonight. (You have no shell in this job, deliberately, and you do not need one.)
 3. Find AI SDKs, agent frameworks, gateways and inference providers that are **not** in the
    catalogue, or whose entry points have **changed**. Look at what has shipped or changed in
    roughly the last month. Prefer primary sources: a project's own README, changelog,

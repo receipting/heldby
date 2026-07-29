@@ -46,6 +46,9 @@ concurrency:
 jobs:
   refresh:
     runs-on: ubuntu-latest
+    # An unattended job with a model in it needs a ceiling. Without one the
+    # default is six hours, which is a long time to spend discovering nothing.
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
         with:
@@ -66,25 +69,34 @@ jobs:
 
       # 2 · The only step that uses a model. Skipped, loudly, without a key —
       #     a fork inherits this workflow and must not fail because of that.
+      #
+      #     Note what the model is NOT given. No Bash: actions/checkout leaves a
+      #     write-capable token in .git/config, so a shell would let a model that
+      #     has just been reading the open web run git push. It does not need one
+      #     — step 1 already wrote the registry results to /tmp for it to read.
+      #     No GITHUB_TOKEN in this step's environment either.
       - name: Discovery — new and changed frameworks
         id: discovery
+        timeout-minutes: 12
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
+          set -uo pipefail
+          echo '{"proposals": []}' > /tmp/proposals.json
           if [ -z "${ANTHROPIC_API_KEY:-}" ]; then
-            echo "no ANTHROPIC_API_KEY — discovery skipped, registry check still ran." \
-              | tee -a "$GITHUB_STEP_SUMMARY"
-            echo '{"proposals": []}' > /tmp/proposals.json
-            echo "Discovery skipped: no API key configured." > /tmp/summary.md
+            echo "No ANTHROPIC_API_KEY: discovery skipped. The registry check still ran." \
+              | tee -a "$GITHUB_STEP_SUMMARY" > /tmp/summary.md
             exit 0
           fi
           npm install -g @anthropic-ai/claude-code
           # The prompt is a file in the repo, reviewable in its own right.
           claude -p "$(cat .github/prompts/catalog-discovery.md)" \
-            --allowedTools "Read,Write,Bash,WebSearch,WebFetch" \
-            > /tmp/claude.log 2>&1 || true
-          test -f /tmp/proposals.json || echo '{"proposals": []}' > /tmp/proposals.json
-          test -f /tmp/summary.md || echo "Discovery produced no summary." > /tmp/summary.md
+            --allowedTools Read Write WebSearch WebFetch \
+            --permission-mode acceptEdits \
+            > /tmp/claude.log 2>&1 || echo "discovery exited non-zero; treating as no proposals"
+          test -s /tmp/summary.md || echo "Discovery produced no summary." > /tmp/summary.md
+          echo "--- last 40 lines of the discovery log ---"
+          tail -40 /tmp/claude.log || true
 
       # 3 · Deterministic gate one. Additive only, schema-valid, packages resolve.
       - name: Apply proposals
