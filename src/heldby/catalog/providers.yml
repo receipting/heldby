@@ -536,3 +536,89 @@ rules:
             "PERPLEXITY_API_KEY", "REPLICATE_API_TOKEN", "HF_TOKEN", "OPENROUTER_API_KEY",
             "MOONSHOT_API_KEY", "DASHSCOPE_API_KEY", "MINIMAX_API_KEY", "NVIDIA_API_KEY"]
     trifecta_role: secret-source
+
+  - id: google.vertexai.sdk
+    kind: model
+    imports:
+      py: ["vertexai", "google.cloud.aiplatform"]
+    registry:
+      pypi: ["google-cloud-aiplatform"]
+    match:
+      construct: true
+      symbol: ["GenerativeModel", "Client"]
+    note: >
+      The Vertex-hosted Google SDK, a separate distribution from google.genai. The import is `vertexai` (or `google.cloud.aiplatform`) while the distribution is `google-cloud-aiplatform`, so deriving either name from the other misses it. Matches construction because the model is named there and the call is a generic method; `Client` is only meaningful scoped to this import. TypeScript Vertex users are not covered here.
+  - id: deepagents.agent
+    kind: model
+    imports:
+      py: ["deepagents"]
+    registry:
+      pypi: ["deepagents"]
+    match:
+      symbol: ["create_deep_agent"]
+    note: >
+      An agent harness over LangGraph whose default toolset includes filesystem and shell access, so one construction site stands in for an unbounded set of effects. Matches the factory, not what the agent does at runtime, and not the sub-agents it spawns.
+  - id: langchain.classic
+    kind: model
+    imports:
+      py: ["langchain_classic"]
+    registry:
+      pypi: ["langchain-classic"]
+    match:
+      symbol: ["LLMChain", "ConversationChain", "RetrievalQA", "AgentExecutor", "initialize_agent"]
+    note: >
+      LangChain 1.x moved the legacy chains and the langchain-community re-exports out of `langchain` into this distribution, so a repo part-way through that migration imports a module name no existing rule lists. The symbol set is the legacy chain surface; a call reached only through Runnable.invoke is covered by langchain.invoke instead.
+  - id: azure.ai-inference
+    kind: model
+    imports:
+      py: ["azure.ai.inference"]
+    registry:
+      pypi: ["azure-ai-inference"]
+    match:
+      member: ["complete"]
+      symbol: ["ChatCompletionsClient", "EmbeddingsClient"]
+    model_arg: model
+    note: >
+      Azure AI Foundry model deployments reached through Azure's own client rather than the `openai` package. The import is dotted (`azure.ai.inference`) while the distribution is hyphenated. The async client lives at `azure.ai.inference.aio` and is matched by the same import prefix; the npm counterpart is not covered here.
+  - id: openai.codex-sdk
+    kind: model
+    imports:
+      ts: ["@openai/codex-sdk"]
+    registry:
+      npm: ["@openai/codex-sdk"]
+    match:
+      symbol: ["Codex"]
+    note: >
+      A coding-agent SDK: one call drives a session that edits files and runs commands, so the entry point is all a scan can see and the effects are unbounded. The import specifier is verified against the registry; the exported symbol was not read from the package's own README.
+  - id: local.transformers
+    kind: model
+    imports:
+      py: ["transformers"]
+    registry:
+      pypi: ["transformers"]
+    match:
+      symbol: ["pipeline", "AutoModelForCausalLM", "AutoModelForSeq2SeqLM", "AutoModelForSequenceClassification"]
+    model_arg: model
+    note: >
+      A model running in-process with no API key, no base URL and no network call, which is why every URL-, host- and env-var-based rule in this catalogue is blind to it. Matches the load site; `pipeline` also covers classifiers and other non-generative tasks, so the kind of model is a question for the classify pass.
+  - id: local.vllm
+    kind: model
+    imports:
+      py: ["vllm"]
+    registry:
+      pypi: ["vllm"]
+    match:
+      symbol: ["LLM", "AsyncLLMEngine", "SamplingParams"]
+    model_arg: model
+    note: >
+      Self-hosted inference used as a library. Only the offline in-process API is caught here; a vLLM server addressed over HTTP is already covered by llm.http.chat-completions, and the two shapes appear in the same repos.
+  - id: local.sentence-transformers
+    kind: model
+    imports:
+      py: ["sentence_transformers"]
+    registry:
+      pypi: ["sentence-transformers"]
+    match:
+      symbol: ["SentenceTransformer", "CrossEncoder"]
+    note: >
+      Local embedding and reranking models, the in-process counterpart to openai.embeddings. The import uses an underscore and the distribution a hyphen. The model is usually named as a positional string, so no model_arg is claimed.
