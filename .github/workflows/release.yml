@@ -1,0 +1,105 @@
+name: release
+
+# Publishes to PyPI via TRUSTED PUBLISHING (OIDC). There is deliberately no API
+# token anywhere in this repo or in its secrets: GitHub proves its identity to
+# PyPI directly for the duration of the job, so there is nothing to store, nothing
+# to rotate, and nothing to leak. A long-lived PyPI token that can publish under
+# an organisation's name is exactly the credential you do not want sitting in a
+# settings page for years.
+#
+# Two paths on purpose:
+#   - workflow_dispatch -> TestPyPI. Run this FIRST. The first real publish should
+#     never be the first publish ever attempted.
+#   - a v* tag          -> PyPI, the real thing.
+#
+# Setup is in docs/RELEASING.md. It needs a person with the PyPI account.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      # Publishing a package whose tests fail is how a broken release reaches
+      # people who trusted the version number.
+      - run: uv sync
+      - run: uv run pytest -q
+
+      # The catalogue is data files inside the package. If they do not make it
+      # into the wheel, `heldby scan` is dead on arrival for everyone who
+      # installs it — and it would still import cleanly, so nothing else catches
+      # this.
+      - name: Build, and assert the catalogue shipped
+        run: |
+          uv build
+          uvx twine check dist/*
+          uv run python - <<'PY'
+          import glob, sys, zipfile
+          wheel = glob.glob("dist/*.whl")[0]
+          shipped = [n for n in zipfile.ZipFile(wheel).namelist()
+                     if n.startswith("heldby/catalog/") and n.endswith(".yml")]
+          print(f"catalogue files in {wheel}: {shipped}")
+          if len(shipped) < 3:
+              sys.exit(f"catalogue missing from the wheel — refusing to publish {wheel}")
+          PY
+
+      # The tag must match the version being published, or `pip install heldby==x`
+      # installs something other than the commit that tag points at.
+      - name: Assert the tag matches the version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          VERSION=$(uv run python -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
+          TAG="${GITHUB_REF_NAME#v}"
+          echo "pyproject=$VERSION tag=$TAG"
+          [ "$VERSION" = "$TAG" ] || { echo "tag $TAG does not match version $VERSION"; exit 1; }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  testpypi:
+    # The rehearsal. Manual only.
+    if: github.event_name == 'workflow_dispatch'
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: testpypi
+    permissions:
+      id-token: write # the OIDC token, and nothing else
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
+          skip-existing: true
+
+  pypi:
+    # The real thing. Tags only.
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: pypi
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1

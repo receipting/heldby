@@ -1,10 +1,10 @@
-__pycache__/
-*.py[cod]
-.venv/
-dist/
-build/
 *.egg-info/
+*.py[cod]
+.DS_Store
 .pytest_cache/
 .ruff_cache/
+.venv/
 .wip/
-.DS_Store
+__pycache__/
+build/
+dist/
