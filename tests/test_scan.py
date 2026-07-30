@@ -372,3 +372,31 @@ def test_an_unparsed_notebook_is_not_called_a_python_file(cat, tmp_path):
     )
     report = scan(tmp_path, cat)
     assert any("notebook(s) would not parse" in limit for limit in report.limits)
+
+
+def test_a_method_named_eval_is_not_pythons_eval(cat, tmp_path):
+    """`model.eval()` is PyTorch's eval MODE, and it appears in every ML repository
+    ever written. Reporting it as arbitrary code execution makes the whole
+    protected-action section noise."""
+    (tmp_path / "m.py").write_text(
+        "def load():\n    return model.eval(), tokenizer\n", encoding="utf-8"
+    )
+    execs = [s for s in scan(tmp_path, cat).sites if s.action == "execute-code"]
+    assert not execs, f"unexpected: {[(s.rule_id, s.evidence) for s in execs]}"
+
+
+def test_bare_eval_still_fires(cat, tmp_path):
+    (tmp_path / "e.py").write_text("def go(src):\n    return eval(src)\n", encoding="utf-8")
+    assert any(s.action == "execute-code" for s in scan(tmp_path, cat).sites)
+
+
+def test_prose_in_a_comment_is_not_a_finding(cat, tmp_path):
+    """A comment reading "need to set the packages to run this code block" fired
+    the subprocess rule on the word "run". A report whose findings include English
+    sentences is one a reader stops trusting on the first page."""
+    (tmp_path / "c.py").write_text(
+        "import os\n# need to set the packages to run this code block\nx = 1\n",
+        encoding="utf-8",
+    )
+    hits = [s for s in scan(tmp_path, cat).sites if s.action == "execute-code"]
+    assert not hits, f"unexpected: {[(s.rule_id, s.evidence) for s in hits]}"

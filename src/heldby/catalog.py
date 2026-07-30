@@ -23,6 +23,7 @@ from __future__ import annotations
 import concurrent.futures
 import hashlib
 import json
+import re
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -99,7 +100,8 @@ def _parse_match(raw: Any, where: str) -> Match:
     if not isinstance(raw, dict):
         raise CatalogError(f"{where}: `match` must be a mapping")
 
-    known = {"member", "symbol", "ambient", "construct", "url_contains", "url_literal", "env"}
+    known = {"member", "symbol", "ambient", "construct", "url_contains", "url_literal",
+             "env", "requires"}
     unknown = set(raw) - known
     if unknown:
         raise CatalogError(f"{where}: unknown match keys {sorted(unknown)}")
@@ -111,7 +113,17 @@ def _parse_match(raw: Any, where: str) -> Match:
     if not isinstance(construct, bool):
         raise CatalogError(f"{where}: `construct` must be true or false")
 
+    requires = raw.get("requires")
+    if requires is not None:
+        if not isinstance(requires, str):
+            raise CatalogError(f"{where}: `requires` must be a regular expression string")
+        try:
+            re.compile(requires)
+        except re.error as exc:
+            raise CatalogError(f"{where}: `requires` is not a valid regex — {exc}") from exc
+
     match = Match(
+        requires=requires,
         member=_as_tuple(raw.get("member"), where=where, field="member"),
         symbol=_as_tuple(raw.get("symbol"), where=where, field="symbol"),
         ambient=ambient,

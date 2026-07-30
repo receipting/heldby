@@ -20,6 +20,7 @@ from pathlib import Path
 from . import __version__, catalog as catalog_mod
 from .catalog import Catalog, CatalogError
 from . import adopt as adopt_mod
+from .context import build_packets, render_packets
 from . import lint as lint_mod
 from .render import Process, Register, render_json, render_markdown
 from .scan import ScanReport
@@ -574,6 +575,38 @@ def cmd_adopt(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+def cmd_context(args: argparse.Namespace) -> int:
+    """Emit the code a classifier needs, per call site.
+
+    The half that was missing. `scan` answers where a model runs; this assembles
+    the evidence for the two questions that actually matter, so answering them
+    costs one read per site instead of a fresh exploration.
+    """
+    root = Path(args.path).resolve()
+    if not root.is_dir():
+        print(f"heldby: {root} is not a directory", file=sys.stderr)
+        return EXIT_UNREADABLE
+    try:
+        cat = catalog_mod.load()
+    except CatalogError as exc:
+        print(f"heldby: catalogue will not load — {exc}", file=sys.stderr)
+        return EXIT_UNREADABLE
+
+    report = scan_repo(root, cat, ignore_declarations=True, include_tests=args.include_tests)
+    packets = build_packets(root, report, limit=args.limit)
+    if not packets:
+        print("heldby: no model call sites, so there is nothing to classify.", file=sys.stderr)
+        return EXIT_OK
+
+    text = render_packets(packets, report)
+    if args.out:
+        Path(args.out).write_text(text, encoding="utf-8")
+        print(f"wrote {args.out} — {len(packets)} packet(s)", file=sys.stderr)
+    else:
+        print(text)
+    return EXIT_OK
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="heldby",
@@ -664,6 +697,16 @@ def main(argv: list[str] | None = None) -> int:
     ad.add_argument("--dry-run", action="store_true", help="print what would be written")
     ad.add_argument("--force", action="store_true", help="overwrite an existing declaration")
     ad.set_defaults(func=cmd_adopt)
+
+    cx = sub.add_parser(
+        "context",
+        help="emit the code a classifier needs per call site, to answer what holds it",
+    )
+    cx.add_argument("path", nargs="?", default=".", help="repo to read (default: .)")
+    cx.add_argument("--out", metavar="FILE", help="write the packets here")
+    cx.add_argument("--limit", type=int, help="only the N richest sites")
+    cx.add_argument("--include-tests", action="store_true", help="also read test files")
+    cx.set_defaults(func=cmd_context)
 
     args = parser.parse_args(argv)
     return args.func(args)

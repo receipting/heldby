@@ -121,6 +121,11 @@ class Match:
     url_contains: tuple[str, ...] = ()
     url_literal: tuple[str, ...] = ()
     env: tuple[str, ...] = ()
+    #: A regex that must ALSO appear on the matching line. Exists for the case
+    #: where a name alone cannot distinguish two very different operations:
+    #: `open(p)` reads a file and `open(p, "w")` writes one, and reporting every
+    #: read as a write turns the protected-action section into noise.
+    requires: str | None = None
 
     def is_empty(self) -> bool:
         return not any(

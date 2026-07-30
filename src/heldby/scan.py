@@ -77,6 +77,38 @@ TEST_PATH_RE = re.compile(
     re.IGNORECASE,
 )
 
+#: A line comment. Stripped before matching, because prose is not code: a comment
+#: reading "need to set the packages to run this code block" fired the subprocess
+#: rule on the word "run", and a report whose findings include English sentences is
+#: one a reader stops trusting on the first page.
+COMMENT_RE = re.compile(r"(?:^|\s)(?:#+|//+)\s.*$")
+
+
+#: A function or method DECLARATION. Never a call, however much its parameter list
+#: looks like one: `def llm_completion(chat_prompt="", system="", temp=0.7)` fired
+#: the subprocess rule on the parameter named `system`, and
+#: `def run(self, queries)` fired it on the name of the function being defined.
+#: The predecessor tool needed the same guard for the same reason.
+DEFINITION_RE = re.compile(
+    r"^\s*(?:@|(?:async\s+)?def\s|(?:export\s+)?(?:async\s+)?function\s|class\s)"
+)
+
+
+def strip_comment(line: str) -> str:
+    """Remove a trailing line comment, leaving string literals alone.
+
+    Deliberately conservative: it requires whitespace after the marker, so a URL
+    containing `//` and a Python string containing `#` both survive. A comment
+    written `#no-space` is not stripped, which over-reports rather than under-.
+
+    One or more markers, because `## heading` is the common notebook style and a
+    pattern expecting exactly one leaves every one of them unstripped.
+    """
+    if '"' not in line and "'" not in line and "`" not in line:
+        return COMMENT_RE.sub("", line)
+    return line
+
+
 #: Text saying a URL is reaching the network here, rather than sitting in config.
 NETWORK_HINT = re.compile(
     r"\b(fetch|axios|request|requests|httpx|urllib|urlopen|http|client|post|send|curl)\b",
@@ -402,16 +434,37 @@ def _compile(rule: Rule) -> list[tuple[str, re.Pattern[str], bool]]:
         # single chain instead — which is what the first cut did — builds a regex
         # like `.emails.send.sendMail` that can never match anything, and the rule
         # silently never fires. A rule that cannot fire is worse than no rule.
-        chains = [
-            r"\s*\.\s*".join(f"(?:{_alt((part,))})" for part in entry.split("."))
-            for entry in m.member
-        ]
-        out.append(("member", re.compile(rf"\.\s*(?:{'|'.join(chains)})\b"), True))
+        # Two shapes, anchored differently on purpose.
+        #
+        #   ["messages.create"]  → a method chain on an OBJECT, so it must be
+        #                          preceded by a dot: `client.messages.create`.
+        #   ["subprocess.run"]   → a MODULE-qualified call, where the module IS the
+        #                          root, so requiring a leading dot demands
+        #                          `something.subprocess.run` and never matches.
+        #
+        # A single bare name keeps the leading dot: `["invoke"]` must match
+        # `chain.invoke(...)` and not every local function called `invoke`.
+        chains: list[str] = []
+        for entry in m.member:
+            parts = entry.split(".")
+            body = r"\s*\.\s*".join(f"(?:{_alt((part,))})" for part in parts)
+            # Not-preceded-by-a-word-character, which permits both `.messages` and
+            # a chain at the start of an expression while rejecting `mysubprocess`.
+            # An optional leading dot cannot be used here: it consumes the very
+            # character a following lookbehind would test, so the two never agree.
+            prefix = r"(?<![\w])" if len(parts) > 1 else r"\.\s*"
+            chains.append(prefix + body)
+        out.append(("member", re.compile(rf"(?:{'|'.join(chains)})\b"), True))
     if m.ambient:
+        # The negative lookbehind is load-bearing. An AMBIENT match is a global —
+        # bare `eval(...)`, not `something.eval(...)`. Without it, PyTorch's
+        # `model.eval()` reads as Python's eval() and every ML repository in
+        # existence gets reported as executing arbitrary code. A method call on an
+        # object is a member access, and members are matched by the member field.
         pattern = (
             rf"\bnew\s+{re.escape(m.ambient)}\s*\("
             if m.construct
-            else rf"\b{re.escape(m.ambient)}\s*\("
+            else rf"(?<![.\w]){re.escape(m.ambient)}\s*\("
         )
         out.append(("ambient", re.compile(pattern), False))
     if m.url_contains:
@@ -473,6 +526,7 @@ def scan(
     compiled = {rule.id: _compile(rule) for rule in catalog.rules}
 
     sites: list[Site] = []
+    seen_sites: set[tuple[str, int, str]] = set()
     labels: dict[str, set[str]] = {}
     declarations: list[str] = []
     files_scanned = 0
@@ -553,8 +607,18 @@ def scan(
             for why, pattern, needs_import in compiled[rule.id]:
                 if needs_import and not has_import:
                     continue
-                for index, line in enumerate(lines):
-                    if len(line) > 1000 or not pattern.search(line):
+                for index, raw_line in enumerate(lines):
+                    if len(raw_line) > 1000:
+                        continue
+                    if rule.action:
+                        if DEFINITION_RE.match(raw_line):
+                            continue
+                        line = strip_comment(raw_line)
+                    else:
+                        line = raw_line
+                    if not pattern.search(line):
+                        continue
+                    if rule.match.requires and not re.search(rule.match.requires, line):
                         continue
 
                     if why in {"symbol", "member"}:
@@ -574,6 +638,10 @@ def scan(
                             lines, index, MODEL_ID_RE
                         )
 
+                    key = (rel, index + 1, rule.id)
+                    if key in seen_sites:
+                        continue
+                    seen_sites.add(key)
                     sites.append(
                         Site(
                             file=rel,
@@ -582,7 +650,7 @@ def scan(
                             kind=rule.kind,
                             why=why,
                             confidence=confidence,
-                            evidence=line.strip()[:200],
+                            evidence=raw_line.strip()[:200],
                             ecosystem=ecosystem,
                             action=rule.action,
                             severity=rule.severity,

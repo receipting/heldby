@@ -35,11 +35,19 @@ rules:
     payload_arg: 0
     remedies: [literal-argv, constant-payload, sandbox]
     imports: { py: ["subprocess", "os"] }
-    match: { symbol: ["run", "Popen", "call", "check_output", "check_call", "system", "popen"] }
+    match:
+      member: ["subprocess.run", "subprocess.Popen", "subprocess.call",
+               "subprocess.check_output", "subprocess.check_call",
+               "os.system", "os.popen", "os.execv", "os.spawnv"]
+      symbol: ["Popen", "check_output", "check_call"]
     note: >
-      subprocess.run and os.system. Deliberately over-approximate: `run` is a
-      common method name, so the classify pass confirms. shell=True is the
-      detail that matters and only reading the call shows it.
+      NARROWED 30 Jul 2026 by a person, after measurement. It matched bare `run`,
+      `call` and `system`, which are three of the most common words in any
+      codebase — and across ten repositories those three produced findings like
+      `def run(self, queries)`, a parameter named `system`, an f-string reading
+      "{n} calls", and a docstring line "leading to the call." Qualified member
+      chains carry the same signal with none of that. `Popen` and `check_output`
+      stay as bare symbols because nothing else is called that.
 
   - id: exec.eval
     action: execute-code
@@ -272,6 +280,11 @@ rules:
     match:
       symbol: ["writeFile", "writeFileSync", "appendFile", "appendFileSync", "createWriteStream",
                "write_text", "write_bytes", "open"]
+      # `open(p)` reads and `open(p, "w")` writes. Without this, every file READ in
+      # a repository was reported as a protected write — `with open(curr_file) as
+      # f:` is not a write-file finding, and a section full of those is one a
+      # reader learns to skip.
+      requires: "[\"'][wax]b?\\+?[\"']|write_text|write_bytes|writeFile|appendFile|createWriteStream"
     note: >
       Model output written to the filesystem — what every coding agent does. Also
       the quiet path by which a model's prose becomes durable state that a later
