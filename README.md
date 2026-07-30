@@ -2,20 +2,28 @@
 
 **Find every place AI runs in your codebase, and name what stands between each model's output and a real-world effect.**
 
-Output is an *AI register*: a table you can hand to an auditor, paste into a vendor
+You get an *AI register*: a table you can hand to an auditor, paste into a vendor
 questionnaire, or publish as a trust-centre page.
 
-The four-class framework below was developed at [receipting.ai](https://receipting.ai) to
-govern its own estate. The tool is MIT-licensed; so is the framework. Use both.
+```
+| Process        | Class    | Held by                                          |
+|----------------|----------|--------------------------------------------------|
+| matching       | Decide   | sign gate; totals recomputed; threshold else human|
+| support-chat   | Converse | closed loop; no tool use at all                   |
+| closing-draft  | Write    | a named person picks recipients and clicks Send   |
+| report-writer  | Write    | **nothing**                                       |
+```
 
-## Run it on your own repo
+That last row is the one worth having. A register that can't record a gap is a brochure.
 
-You need [`uv`](https://docs.astral.sh/uv/). Your repo needs **nothing** — no dependencies
-installed, no build step, no config — and heldby never writes to it unless you run `adopt`.
+---
 
-### The full audit — inventory, classes, and a register
+## Run it
 
-Classification means reading the code around each call site, so that half runs in
+You need [`uv`](https://docs.astral.sh/uv/). Your repo needs nothing — no dependencies
+installed, no build, no config. heldby writes nothing unless you run `adopt`.
+
+**The full audit.** Classification means reading the code around each call, so it runs in
 [Claude Code](https://claude.com/claude-code):
 
 ```
@@ -26,256 +34,244 @@ Classification means reading the code around each call site, so that half runs i
 /plugin install heldby@heldby
 ```
 
-Then, from your repo, invoke it by name:
+Then from your repo, `/heldby` — or just ask for an AI register and it triggers itself. It
+sweeps, reads the code around every call site, argues with its own answers, and writes
+`ai-register.md`. Every row it drafts is marked † until you review it.
 
-```
-/heldby
-```
-
-…or just ask, and it triggers on its own:
-
-> Build me an AI register for this repo.
-
-It runs the sweep, reads the code around every candidate site, adversarially checks its own
-classifications, and writes `ai-register.md` and `ai-register.json`. Expect questions — a
-control it cannot find in the code is a question, not an assumption.
-
-### The inventory alone — no Claude Code needed
-
-The deterministic half is an ordinary CLI:
+**The inventory alone**, no Claude Code:
 
 ```bash
 uvx heldby scan .
 ```
 
-That prints every candidate model call site, every protected action near it, what the code
-calls its own AI features, and — read this part first — what the sweep could not see. Add
-`--json` to pipe it somewhere.
-
-Same form for the others, e.g. to check the detection surface is not stale:
-
-```bash
-uvx heldby catalog --check-registries
-```
-
-To put it on your PATH instead:
-
-```bash
-uv tool install heldby
-```
-
-…after which it is just `heldby scan .`.
-
-### In CI
-
-`scan`, `lint` and `register` are deterministic and exit non-zero on a finding, so they can
-gate a build:
-
-```yaml
-- run: uvx heldby lint .
-```
-
-Run `heldby adopt .` first to seed the config and the baseline — without them the gate has
-nothing to enforce, and it says so rather than passing.
-
-Classification deliberately does **not** belong in CI. It is a reviewed artefact that CI
-checks is current, never something re-inferred on every push.
+Every candidate model call, every protected action near it, and what the sweep couldn't
+see. `--json` to pipe it somewhere.
 
 ---
 
-## The two useless questions
-
-Every AI governance conversation currently runs on two of them:
-
-- *"Do you use AI?"* — everyone does.
-- *"How accurate is the model?"* — unanswerable, and the wrong axis.
-
-The useful question is **what the model can reach when it is wrong** — because it will be
-wrong, at a rate nobody can drive to zero.
-
-Almost nobody can answer that about their own codebase, because almost nobody has an
-inventory. `heldby` builds the inventory and classifies it.
-
-<p align="center">
-  <img src="diagrams/four-classes.svg" alt="Four classes of AI use: Read, Decide, Converse, Write — each with what stands between the model output and the real world" width="100%">
-</p>
-
 ## The four classes
 
-| Class | What the model does | The rule |
-|---|---|---|
-| **Read** | Turns a document or message into structured data | No person required — but the output must be checkable against something real: a column that exists in the file, an account already on file, a total that reconciles. If it cannot be checked against the world, it is not Read. |
-| **Decide** | Proposes an action with a consequential real-world effect | No person on the fast path *by design*. Bounded by deterministic gates plus a configured threshold; everything outside the threshold goes to a queue a person works. |
-| **Converse** | Answers the person who asked — them and you, nobody else | No separate review, because the person who asked is the person who judges the answer, as they read it. Only valid if the loop is genuinely closed. |
-| **Write** | Produces prose the system will carry to someone else | A named person edits and releases it, and the record says who. Nothing AI-written leaves unattended. |
+| Class | The rule |
+|---|---|
+| **Read** | Turns a document or message into structured data. No person required — but the output must be checkable against something real: a column that exists in the file, an account already on file, a total that reconciles. If it can't be checked against the world, it isn't Read. |
+| **Converse** | Answers the person who asked — them and you, nobody else. No separate review, because the person who asked is the person who judges the answer as they read it. |
+| **Decide** | Acts with a consequential real-world effect and no person on the fast path, *by design*. Bounded by deterministic gates plus a configured threshold; everything outside the threshold goes to a queue a person works. |
+| **Write** | Produces prose the system carries to someone else. A named person edits and releases it, and the record says who. |
 
-Where a process spans two classes, **the stricter class governs**. Strictness order:
-Read < Converse < Decide < Write.
+Risk rises left to right: **Read < Converse < Decide < Write**. A process spanning two
+classes gets the stricter one.
+
+<p align="center">
+  <img src="diagrams/four-classes.svg" alt="Four classes of AI use — Read, Decide, Converse, Write — each with what stands between the model output and the real world" width="100%">
+</p>
 
 ### Why four and not two
 
 Input/output is the obvious split and it breaks on the first hard case. A payment-matching
 engine reads nothing a person will see and writes nothing a person will read — **and it
-moves money**. File it under input and you have classified your only money-moving process
-as low risk. File it under output and you have committed to a human reviewing every
-allocation, which is the entire job the software exists to remove.
+moves money**. File it under input and you've classified your only money-moving process as
+low risk. File it under output and you've committed to a human reviewing every allocation,
+which is the whole job the software exists to remove.
 
-The classes are defined by **the gate, not the technology**. Two call sites using the same
-model on the same document belong to different classes if what they can reach differs.
+Classes are defined by the gate, not the technology. Two call sites using the same model on
+the same document belong to different classes if what they can reach differs.
 
-### The closed-loop test (Converse only)
+### The closed-loop test
 
-Converse is the class people will abuse, because "it's just a chatbot, the user reads it"
-is the easiest way to dodge review. All three must hold:
+Converse is the class people abuse, because "it's just a chatbot, the user reads it" is the
+easiest way to dodge review. All three must hold:
 
 1. **A person started it** — not a cron, not a queue, not another system.
 2. **It reaches only the asker and the operator.** Both parties to the conversation may
-   hold it. What breaks the loop is a **third** party the asker did not address.
+   hold it. What breaks the loop is a *third* party the asker didn't address.
 3. **It does nothing.** No payment, no send, no write to a system of record, no row another
    process later acts on.
 
-The line between Converse and Write is **who carries the output onward**. If a person
-carries it, they reviewed it by definition — reading it *is* the review. If the system
-carries it, stores it to serve later, or routes it to a third party, that is Write.
+Fail one and it's Write. The third test is where real systems fail: watch for model output
+persisted and fed back into a later prompt. Nothing was sent, no money moved, and the
+model's prose is now durable state shaping future decisions with nobody in the loop.
 
-Fail any one test and it is Write. A class you can file into to dodge review is worse than
-no class at all.
+---
+
+## What we learned running it on fifteen repos
+
+Finance, news, deep research, resume bots, content pipelines. 150 model call sites, 60
+register rows, 10 held by nothing. Five things came up again and again.
+
+**Capability decides more than controls do.** Three content-generation repos looked
+identical on paper. All three are safe, and none of them because of a control — no publish
+client exists in any of them. One has a `ready_to_upload` flag that nothing consumes.
+Another's prompts insist the piece is "ready for publication" on a platform it has no client
+for. *"This repo cannot send anything"* is worth ten paragraphs about output validation.
+
+**A model reviewing a model is not review.** Four of fifteen had one. The clearest was an
+evaluation agent asked to score its own work 1–10 inside its own prompt, where no code ever
+read the score. heldby never credits this, and neither should you.
+
+**Names lie in both directions.** One repo had six files in `src/agents/` that call no model
+at all, including `risk_management_agent` — pure arithmetic. Another looked AI-free in
+TypeScript because every model call was in Rust. Inventory by call site, not by name.
+
+**The gap is usually missing wiring, not a gate.** One repo has an unauthenticated ACH
+endpoint with no amount cap. Nothing reaches it — because no model in the repo has
+tool-calling. That's an accident, not a control, and the register says so.
+
+**Some of the worst findings aren't about AI.** One repo pools every visitor's API key into
+a process-global and spends it for strangers. Another writes model prose into HTML with
+unescaped `str.replace`. Both surfaced from a sweep looking for model calls.
+
+---
 
 ## "Held by" — the load-bearing column
 
-For every AI use, name the specific control between the model's output and the effect. Not
-"we have guardrails". The register entry has to survive an auditor reading the code next to
-it. Real examples:
+Name the specific control between the model's output and the effect. It has to survive an
+auditor reading the code next to it.
+
+**Good** — you could go and check each one, and a specific code change would falsify it:
 
 - *Sign alignment blocks a debit matching a credit; totals are recomputed from the invoice
   rows rather than read from the model; only a high-confidence match inside the configured
-  threshold auto-allocates, and everything else goes to a human queue.*
-- *Every column it names must exist in the file; the mapping is cached per header layout
-  and reused rather than re-guessed.*
+  threshold auto-allocates.*
 - *Ranks a closed list harvested deterministically by code — never proposes an address
-  itself. Any address it returns that was not harvested is discarded.*
+  itself. Any address it returns that wasn't harvested is discarded.*
 - *Three outcomes only, and every failure path defaults to the one that escalates.*
 
-If the honest answer is **"nothing"**, the register says nothing. **A register that cannot
-record a gap is a brochure.**
+**Not controls**, however often they're offered as one:
 
-## What it is not
+| Claimed | Why not |
+|---|---|
+| "We have guardrails" | Names nothing. |
+| An AI gateway or proxy | Meters and logs. It doesn't stand between output and effect. |
+| A moderation or judge model | A model holding a model. |
+| A retry | A differently wrong answer. |
+| The model's own confidence score | Self-reported. |
+| "The prompt tells it not to" | Not a mechanism. |
+| A schema binding | Only if you check what happens when it fails. A silent fallback to free text removes the guarantee. |
 
-Said out loud, because tools in this space routinely imply otherwise:
+If nothing holds it, write nothing. Not "under review", not "planned".
 
-- **Not taint analysis**, and it must never imply it is. Reachability is a reported claim
-  with a confidence and a tier, never a proof.
-- **Not a model-accuracy evaluator.** Accuracy is the wrong axis; see above.
-- **Not a prompt-injection scanner** — though it flags where untrusted input reaches a
-  prompt, because that is reach.
-- **Not a compliance certification, and not legal advice.**
-
-Every finding carries a confidence — confirmed, inferred or unknown — and the report states
-in plain words what the analysis could not see. If a sweep skips a language or caps at N
-files, it says so: silent caps read as "covered everything".
+---
 
 ## The commands
 
-The split is the architecture. Discovery, linting and emission are **deterministic** and
-gate a build with an exit code. Classification — what class a site is, and what actually
-holds it — needs a model reading the surrounding code, so it lives in the skill and its
-result is committed as a reviewed artefact. CI checks the artefact is current; it never
-re-infers it.
+Discovery, linting and emission are deterministic and gate a build with an exit code.
+Classification needs a model reading code, so it lives in the skill and its result is a
+reviewed artefact. CI checks that artefact is current; it never re-infers it.
 
 | Command | What it does | Model? |
 |---|---|---|
-| `heldby scan <repo>` | Every candidate model call site, every protected action near it, and what it could not see | no |
-| *(the skill)* | Reads the code around each site and assigns class, reach and `held_by` | **yes** |
-| `heldby register` | Renders the register a customer or auditor reads, plus a completeness check | no |
+| `heldby scan <repo>` | Every candidate model call site, every protected action near it, and what it couldn't see | no |
+| `heldby context <repo>` | The code a classifier needs per site — enclosing function, protected actions in the file, one-hop callees — ranked worst-first | no |
+| *(the skill)* | Reads those packets and assigns class, reach and `held_by` | **yes** |
+| `heldby register` | Renders the register, plus an independent completeness check | no |
 | `heldby lint <repo>` | Fails the build on a model call outside the designated gateway module | no |
 | `heldby adopt <repo>` | Writes declarations and the gate into the repo, so the next run is declared not guessed | no |
 | `heldby catalog` | Prints the detection surface; `--check-registries` resolves every package name | no |
 
-### Discovery is tuned for recall, not precision
+### Discovery is tuned for recall
 
-It emits candidates marked `confirmed` or `inferred` and expects the classify pass to
-clear the false positives. An over-flagged site costs a reviewer a minute; a
-wrongly-cleared site hides exactly the risk this exists to find, behind a clean report.
+It emits candidates marked `confirmed` or `inferred` and expects the classify pass to clear
+the false positives. An over-flagged site costs a reviewer a minute; a wrongly-cleared one
+hides exactly the risk this exists to find, behind a clean report.
 
 Two failure modes it will hit on real code, and reports rather than hides:
 
 - **The factory.** Provider SDKs confined to a few client-construction files while the
-  actual AI features live in modules importing no SDK at all. Both are reported and
-  neither is linked — so trust the self-labelled process names over the call sites.
-- **The provider registry.** A dozen vendors behind one `openai` import, separated only
-  by `base_url` values in a config table. The base URL is the only tell, and the model
-  id is usually a runtime value — so "which model" is often legitimately unanswerable.
+  actual AI features live in modules importing no SDK at all. Both are reported, neither is
+  linked — so trust the self-labelled process names over the call sites.
+- **The provider registry.** A dozen vendors behind one `openai` import, separated only by
+  `base_url` values in a config table. The model id is usually a runtime value, so "which
+  model" is often legitimately unanswerable. The register says so rather than guessing.
+
+### The completeness check
+
+Every register carries one. An independent sweep, blind to the table, looks for AI the
+register misses — and reports any file with a model call that no row claims. Label coverage
+asks whether every name you found is written down; this asks whether every place a model
+runs is accounted for, which is the question that catches a process you forgot entirely.
 
 ### Graduating off inference
 
-`heldby adopt` writes the findings back as declarations plus a lint gate, so a new AI
-call cannot ship without declaring what it is — it will not compile. It **ratchets**:
-one gateway module is designated and every existing bypass is baselined, so the gate is
-green on day one and can only tighten. And it generates the *typed wrapper*, not just
-the declaration, because the load-bearing part is the `feature: AIFeature` parameter
-rather than the list.
+`heldby adopt` writes the findings back as declarations plus a lint gate, so a new AI call
+can't ship without declaring what it is — it won't compile. It **ratchets**: one gateway
+module is designated and every existing bypass is baselined, so the gate is green on day one
+and can only tighten. It generates the *typed wrapper*, not just the declaration, because
+the load-bearing part is the `feature: AIFeature` parameter rather than the list.
+
+---
+
+## What it is not
+
+- **Not taint analysis**, and it must never imply it is. Reachability is a reported claim
+  with a confidence and a tier, never a proof.
+- **Not a model-accuracy evaluator.** Accuracy is the wrong axis.
+- **Not a prompt-injection scanner** — though it flags where untrusted input reaches a
+  prompt, because that's reach.
+- **Not a compliance certification, and not legal advice.**
+
+Every finding carries a confidence, and every report states in plain words what it couldn't
+see. If a sweep skips a language or excludes tests, it says so with counts — silent caps
+read as "covered everything".
+
+---
 
 ## The catalogue
 
-Detection is driven by data, not by prose baked into a prompt, so it can be extended by
-pull request without touching any logic.
+Detection is data, not prose baked into a prompt, so you can extend it by pull request
+without touching any logic.
 
 ```bash
-# print the entire detection surface
-uvx heldby catalog
-
-# resolve every catalogued package name against npm and PyPI
-uvx heldby catalog --check-registries
+uvx heldby catalog                     # the entire detection surface
+uvx heldby catalog --check-registries  # resolve every name against npm and PyPI
 ```
 
-Two design rules make the catalogue trustworthy:
+Two rules make it trustworthy.
 
 **Imports and registries are different things.** `imports` is what appears in an import
 statement; `registry` is what a package index knows the distribution as. They genuinely
-differ — the Google SDK is `@google/genai` on npm, `google-genai` on PyPI, and
-`google.genai` in a Python import. A catalogue that conflates them reports "no AI detected"
-over a Python codebase built on LangChain.
+differ — the Google SDK is `@google/genai` on npm, `google-genai` on PyPI, `google.genai` in
+a Python import. Conflating them reports "no AI detected" over a Python LangChain codebase.
 
-**The catalogue only grows.** A rule is never deleted and its match is never narrowed; a
+**The catalogue only grows.** A rule is never deleted and its match never narrowed; a
 superseded package is marked `deprecated: true` and keeps matching, because repos on the old
-SDK still exist and a deleted rule is a silent blind spot. Renames are therefore additive —
-which is what makes the nightly freshness job safe to merge unattended.
+SDK still exist and a deleted rule is a silent blind spot. That's not theoretical: one repo
+in our sweep is detected *only* by a deprecated-SDK rule.
 
-Adding a rule: see [`src/heldby/catalog/`](src/heldby/catalog/). Contributions of new
-frameworks and providers are the most useful thing you can send.
+A nightly job checks every catalogued name against npm and PyPI and opens a PR for what it
+finds. It may only add rules — a gate refuses anything that removes or narrows one, because
+that change needs a person.
+
+Rules live in [`src/heldby/catalog/`](src/heldby/catalog/). New frameworks and providers are
+the most useful contribution you can send.
 
 ---
 
 ## Who built this, and why
 
-`heldby` comes out of [receipting.ai](https://receipting.ai), which reconciles insurance
-premium-trust-account payments — bank statements and remittances arrive by email, and the
-platform matches them to invoices and posts the results into each customer's accounting
-system. About twenty AI processes across six repositories, several of which touch money.
+heldby comes out of [receipting.ai](https://receipting.ai), which reconciles insurance
+premium-trust-account payments. About twenty AI processes across six repos, several of which
+touch money.
 
-The framework exists because we had to answer the question for real, in front of an
-auditor, with a contractual obligation to notify a customer before adding any new AI
-service. Three attempts got us here:
+We had to answer this for real, in front of an auditor, with a contract requiring us to
+notify a customer before adding any new AI service. Three attempts got us here:
 
 1. **A grep sweep.** Missed an entire repository.
-2. **A call-graph reach analyser.** It graded a well-known agent that shells out to the
-   host as safe, because the agent called its model through an interface and the call graph
-   severed there — and the tool's own honesty instrumentation reported zero uncertainty at
-   exactly the point it had gone blind. It also had no Python support, which is why a
-   script calling a provider directly, outside the gateway everything was supposed to route
-   through, went unnoticed for months.
-3. **Declaring it in the code**, with a lint gate that fails the build when an AI call
-   ships without a declaration. That is what we run now.
+2. **A call-graph reach analyser.** It graded a well-known agent that shells out to the host
+   as safe, because the agent reached its model through an interface and the call graph
+   severed there — and its own uncertainty instrumentation reported zero doubt at exactly
+   the point it had gone blind. It also had no Python support, which is why a script calling
+   a provider outside the gateway went unnoticed for months.
+3. **Declaring it in the code**, with a lint gate that fails the build when an AI call ships
+   without a declaration. That's what we run now.
 
-The expensive lesson: **for code you control, declaring and enforcing beats inferring.**
-Inference is the right tool for a repo you do not control and cannot mandate anything about
-— which is exactly the position you are in when you first point this at a codebase. So
-`heldby` infers first, then offers to write the findings back as declarations plus a gate,
-so the next run is *declared* rather than guessed.
+The lesson: **for code you control, declaring and enforcing beats inferring.** Inference is
+the right tool for a repo you don't control — which is exactly where you are when you first
+point this at a codebase. So heldby infers first, then offers to write the findings back as
+declarations, so the next run is declared rather than guessed.
 
 The other lesson, from the register itself: a live incident auto-allocated four wrong
 invoices because the code trusted a total the model had added up. Totals are now recomputed
-from the invoice rows. That one sentence is what a "held by" column is for, and no
-accuracy score would ever have surfaced it.
+from the invoice rows. That one sentence is what a "held by" column is for, and no accuracy
+score would ever have surfaced it.
 
 MIT licensed. Copyright © 2026 Managed Functions Pty Ltd.
