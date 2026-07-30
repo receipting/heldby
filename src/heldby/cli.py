@@ -19,6 +19,7 @@ from pathlib import Path
 
 from . import __version__, catalog as catalog_mod
 from .catalog import Catalog, CatalogError
+from .render import Process, Register, render_json, render_markdown
 from .scan import ScanReport
 from .scan import scan as scan_repo
 
@@ -347,6 +348,101 @@ def cmd_scan(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+def cmd_register(args: argparse.Namespace) -> int:
+    """Render the register from a reviewed classification plus a fresh sweep.
+
+    The classification file is the source of truth for `class` and `held_by`, and
+    this command will not invent either. What it adds is the sweep: an independent
+    read of the source that knows nothing about the declarations, so the register
+    can carry a completeness claim rather than only an inventory.
+    """
+    import yaml
+
+    spec_path = Path(args.classification)
+    if not spec_path.is_file():
+        print(f"heldby: no classification file at {spec_path}", file=sys.stderr)
+        return EXIT_UNREADABLE
+    spec = yaml.safe_load(spec_path.read_text(encoding="utf-8")) or {}
+
+    missing = [k for k in ("organisation", "components", "processes") if k not in spec]
+    if missing:
+        print(f"heldby: classification is missing {', '.join(missing)}", file=sys.stderr)
+        return EXIT_UNREADABLE
+
+    try:
+        cat = catalog_mod.load()
+    except CatalogError as exc:
+        print(f"heldby: catalogue will not load — {exc}", file=sys.stderr)
+        return EXIT_UNREADABLE
+
+    processes = []
+    for raw in spec["processes"]:
+        processes.append(
+            Process(
+                name=raw["name"],
+                ai_class=raw["class"],
+                model=raw.get("model", "unknown"),
+                repo=raw.get("component", "?"),
+                does=raw.get("does", ""),
+                held_by=raw.get("held_by", ""),
+                reaches=list(raw.get("reaches") or []),
+                source=raw.get("source", "declared"),
+            )
+        )
+
+    # Read every component before writing anything. A register that quietly omits
+    # a component understates the AI in the system to whoever reads it, which is
+    # the one failure that actually matters here.
+    # Component paths resolve against `repos_root` when given, so a committed
+    # classification file is not tied to one machine's directory layout.
+    base = Path(spec["repos_root"]).expanduser() if spec.get("repos_root") else spec_path.parent
+
+    scans: dict[str, ScanReport] = {}
+    for name, rel in spec["components"].items():
+        expanded = Path(rel).expanduser()
+        root = expanded if expanded.is_absolute() else (base / expanded).resolve()
+        if not root.is_dir():
+            print(f"heldby: component {name!r} is not readable at {root}", file=sys.stderr)
+            return EXIT_UNREADABLE
+        scans[name] = scan_repo(root, cat, ignore_declarations=True)
+
+    register = Register(
+        org=spec["organisation"],
+        summary=spec.get("summary", ""),
+        processes=processes,
+        protected_actions=spec.get("protected_actions") or {},
+        scope_notes=list(spec.get("scope_notes") or []),
+        excluded=list(spec.get("excluded") or []),
+        generated=spec.get("generated", ""),
+    )
+
+    markdown = render_markdown(register, scans, layout=args.layout)
+    payload = render_json(register, scans)
+
+    if args.out_md:
+        Path(args.out_md).write_text(markdown, encoding="utf-8")
+        print(f"wrote {args.out_md}", file=sys.stderr)
+    if args.out_json:
+        Path(args.out_json).write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+        print(f"wrote {args.out_json}", file=sys.stderr)
+    if not args.out_md and not args.out_json:
+        print(json.dumps(payload, indent=2) if args.json else markdown)
+
+    undeclared = payload["completeness"]["undeclared_processes"]
+    gaps = payload["counts"]["without_control"]
+    if undeclared:
+        print(
+            f"\nheldby: {len(undeclared)} AI process(es) in the code are not declared: "
+            f"{', '.join(undeclared)}",
+            file=sys.stderr,
+        )
+        return EXIT_FINDING
+    if gaps and args.fail_on_gap:
+        print(f"\nheldby: {gaps} process(es) have nothing holding them.", file=sys.stderr)
+        return EXIT_FINDING
+    return EXIT_OK
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="heldby",
@@ -391,6 +487,29 @@ def main(argv: list[str] | None = None) -> int:
         help="exit 1 if any model site is found (for gating a build)",
     )
     sc.set_defaults(func=cmd_scan)
+
+    reg = sub.add_parser("register", help="render the register a customer or auditor reads")
+    reg.add_argument(
+        "--classification",
+        required=True,
+        metavar="FILE",
+        help="reviewed class and held-by content, plus the components to sweep",
+    )
+    reg.add_argument("--out-md", metavar="FILE", help="write the human register here")
+    reg.add_argument("--out-json", metavar="FILE", help="write the machine register here")
+    reg.add_argument("--json", action="store_true", help="print JSON instead of markdown")
+    reg.add_argument(
+        "--layout",
+        choices=("table", "sections"),
+        default="table",
+        help="table for a screen; sections for print, where a 6-column table collapses",
+    )
+    reg.add_argument(
+        "--fail-on-gap",
+        action="store_true",
+        help="exit 1 if any process has nothing holding it",
+    )
+    reg.set_defaults(func=cmd_register)
 
     args = parser.parse_args(argv)
     return args.func(args)

@@ -29,6 +29,7 @@ from __future__ import annotations
 import ast
 import json
 import re
+import warnings
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -246,7 +247,13 @@ def _py_imports(text: str) -> tuple[set[str], bool]:
     it — and say plainly where it did not.
     """
     try:
-        tree = ast.parse(text)
+        # Someone else's lint warnings are not our output. Parsing arbitrary code
+        # raises SyntaxWarning for things like an invalid escape sequence, and
+        # letting that surface makes the tool look like it is complaining about
+        # itself in the middle of a register a customer is going to read.
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            tree = ast.parse(text)
     except (SyntaxError, ValueError):
         return set(), True
     found: set[str] = set()
