@@ -74,10 +74,19 @@ class Register:
     org: str
     summary: str
     processes: list[Process]
+    #: The findings a reader should meet before any table. The first screen decides
+    #: whether the rest gets read at all: a register that opens with methodology is
+    #: filed, one that opens with "a model call sits one file from pip install" is
+    #: acted on. Written by whoever classified — never generated here.
+    key_findings: list[str] = field(default_factory=list)
     protected_actions: dict[str, str] = field(default_factory=dict)
     scope_notes: list[str] = field(default_factory=list)
     excluded: list[dict] = field(default_factory=list)
     generated: str = ""
+
+    @property
+    def drafted(self) -> list[Process]:
+        return [p for p in self.processes if p.source == "drafted"]
 
     def sorted_processes(self) -> list[Process]:
         return sorted(
@@ -215,10 +224,27 @@ def render_markdown(
     out: list[str] = []
     generated = register.generated or date.today().strftime("%-d %B %Y")
 
-    out.append(f"# AI register — {register.org}")
+    drafted = register.drafted
+    title_suffix = " — DRAFT" if drafted else ""
+    out.append(f"# AI register — {register.org}{title_suffix}")
     out.append("")
+    if drafted:
+        out.append(
+            f"> **Machine-drafted, awaiting review.** {len(drafted)} of "
+            f"{len(register.processes)} row(s) were drafted by a model reading the code and "
+            "have not been confirmed by a person. A drafted row is a starting point for a "
+            "conversation, not a claim of record — rows are marked † below, and the mark is "
+            "removed by reviewing the row, never by rewording it."
+        )
+        out.append("")
     out.append(register.summary.strip())
     out.append("")
+    if register.key_findings:
+        out.append("## What you should know first")
+        out.append("")
+        for i, finding in enumerate(register.key_findings, start=1):
+            out.append(f"{i}. {finding.strip()}")
+            out.append("")
     out.append(
         "Every place a model runs in this system, what class of use it is, and — the column "
         "that matters — **what stands between the model's output and a real-world effect**."
@@ -269,7 +295,8 @@ def render_markdown(
             out.append(f"_{CLASS_RULE[key]}_")
             out.append("")
             for p in group:
-                out.append(f"**`{p.name}`** · {p.model} · {p.repo}")
+                mark = " †" if p.source == "drafted" else ""
+                out.append(f"**`{p.name}`**{mark} · {p.model} · {p.repo}")
                 out.append("")
                 if p.does:
                     out.append(p.does.strip())
@@ -286,10 +313,15 @@ def render_markdown(
         for p in processes:
             reaches = ", ".join(f"`{r}`" for r in p.reaches) if p.reaches else "—"
             held = _cell(p.held_by) if p.has_control else "**nothing**"
+            mark = " †" if p.source == "drafted" else ""
             out.append(
-                f"| `{p.name}` | {CLASS_LABEL.get(p.ai_class, p.ai_class)} | `{p.model}` | "
+                f"| `{p.name}`{mark} | {CLASS_LABEL.get(p.ai_class, p.ai_class)} | `{p.model}` | "
                 f"{p.repo} | {reaches} | {held} |"
             )
+        out.append("")
+
+    if drafted:
+        out.append("_† machine-drafted and unreviewed._")
         out.append("")
 
     gaps = [p for p in processes if not p.has_control]
@@ -439,8 +471,10 @@ def render_json(register: Register, scans: dict[str, ScanReport]) -> dict:
             }
             for p in register.sorted_processes()
         ],
+        "key_findings": register.key_findings,
         "counts": {
             "processes": len(register.processes),
+            "drafted_unreviewed": len(register.drafted),
             "by_class": {
                 key: sum(1 for p in register.processes if p.ai_class == key) for key in CLASS_ORDER
             },

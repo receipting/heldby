@@ -202,3 +202,53 @@ def test_a_row_claiming_its_files_is_located_without_a_label(scans):
     payload = render_json(_register([row]), scans)
     assert payload["completeness"]["unattributed_model_sites"] == []
     assert payload["completeness"]["declared_but_not_located"] == []
+
+
+DRAFT = Process(
+    name="drafted-thing",
+    ai_class="read",
+    model="selected at runtime",
+    repo="x",
+    does="d",
+    held_by="a mechanism",
+    source="drafted",
+)
+
+
+def test_a_drafted_register_says_so_before_anything_else(scans):
+    """The draft is a starting point for a conversation, not a claim of record.
+
+    A machine-drafted row that reads identically to a reviewed one launders a
+    guess into a register — so the banner leads, and every drafted row is marked.
+    """
+    markdown = render_markdown(_register([GOOD, DRAFT]), scans)
+    banner = markdown.index("Machine-drafted, awaiting review")
+    first_row = markdown.index("`invoice-extraction`")
+    assert banner < first_row, "the banner must come before any row"
+    assert "— DRAFT" in markdown.splitlines()[0]
+    assert "`drafted-thing` †" in markdown
+    assert "`invoice-extraction` |" in markdown, "a reviewed row carries no mark"
+
+
+def test_a_fully_reviewed_register_carries_no_draft_furniture(scans):
+    markdown = render_markdown(_register([GOOD]), scans)
+    assert "DRAFT" not in markdown.splitlines()[0]
+    assert "Machine-drafted" not in markdown
+
+
+def test_key_findings_lead_the_document(scans):
+    """The first screen decides whether the rest gets read at all."""
+    register = _register([GOOD])
+    register.key_findings = ["**The one that matters.** A model call sits one file from money."]
+    markdown = render_markdown(register, scans)
+    findings = markdown.index("What you should know first")
+    table = markdown.index("## The register")
+    assert findings < table
+    assert "one file from money" in markdown
+
+
+def test_drafted_count_is_in_the_machine_output(scans):
+    payload = render_json(_register([GOOD, DRAFT]), scans)
+    assert payload["counts"]["drafted_unreviewed"] == 1
+    row = next(p for p in payload["processes"] if p["name"] == "drafted-thing")
+    assert row["source"] == "drafted"

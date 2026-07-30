@@ -42,17 +42,31 @@ Read three things out of the output before anything else:
 Also note `dependencies` with `imported_anywhere: false` — an AI SDK in the
 manifest that nothing imports is a loose end worth a line.
 
-### 2 · Classify — this is your job
+### 2 · Classify — this is your job, and you draft ALL of it
 
-For each candidate site, **read the surrounding code** and decide:
+First, gather the evidence in one shot instead of exploring per site:
+
+```bash
+uv run --directory ${CLAUDE_SKILL_DIR}/../.. heldby context <repo> --out packets.md
+```
+
+One work packet per model call site — the enclosing function, the protected
+actions in the same file, and the one-hop callees that perform one — **ranked so
+the highest-consequence site comes first**. Read the packets in order and decide,
+for every one:
 
 1. Which of the four classes it is.
 2. What it can reach.
-3. **What holds it** — the specific, named control.
+3. **What holds it** — the specific, named control, or honestly nothing.
 
 "The totals are recomputed from the invoice rows rather than read from the model"
-is not a pattern match. It is reading code. A scanner cannot do this, which is why
-the phase exists.
+is not a pattern match. It is reading code. That is why this phase is yours.
+
+Mark **every row you write `source: drafted`**. You are producing a draft the
+user will refine with you — the register says so on its face, and the mark comes
+off a row when a person reviews it, never by rewording it. Draft boldly and
+honestly rather than hedging: a specific claim the user can check and correct
+beats a vague one they can only shrug at.
 
 → **Read [references/classifying.md](references/classifying.md) before you start.**
 It carries the class definitions, the three closed-loop tests, the reachability
@@ -67,9 +81,23 @@ most mistakes: anything you classified Read or Converse that sits within reach o
 a protected action is misclassified until proven otherwise, and every Converse
 claim gets the three closed-loop tests run against it explicitly, one at a time.
 
-### 4 · Report, and optionally adopt
+### 4 · Report — the first screen has to land
 
-Write the classification to a YAML file, then render the register:
+Write the classification to a YAML file. Before the table, write `key_findings`:
+the three to six things a reader should meet first, most consequential first. The
+first screen decides whether the rest gets read at all — a register that opens
+with methodology gets filed; one that opens with "a model call sits one file from
+`pip install`" gets acted on. Each finding is one or two sentences, names a file
+and line, and says why it matters. Lead with, in this order of precedence:
+
+1. Anything a model can reach that moves money, executes code, or grants access.
+2. A `held_by` that is honestly **nothing**.
+3. A capability statement — "this repository cannot place a trade at all" is
+   often the most useful line a register can carry.
+4. The genuinely surprising: a second implementation, a gateway bypass, an AI
+   dependency nothing imports.
+
+Then render:
 
 ```bash
 uv run --directory ${CLAUDE_SKILL_DIR}/../.. heldby register \
@@ -94,6 +122,12 @@ Two fields in that file are easy to miss and carry a lot of the value:
 
 Add `--layout sections` for anything destined for print or PDF; the six-column
 table is for a screen.
+
+**When you present the result in chat, open with the key findings** — not with
+what you did, not with the phase list, not with caveats. The caveats are already
+in the artefact, where they belong. Then invite the refinement: the draft marks
+are the agenda, and each conversation turn should be retiring † marks by reviewing
+rows with the user until the register is theirs rather than yours.
 
 If the user owns this code and wants to stop guessing, offer `adopt`:
 → [references/adopting.md](references/adopting.md)
