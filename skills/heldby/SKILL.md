@@ -62,6 +62,12 @@ for every one:
 "The totals are recomputed from the invoice rows rather than read from the model"
 is not a pattern match. It is reading code. That is why this phase is yours.
 
+Write every sentence — summary, findings, `held_by` — per
+[VOICE.md](../../VOICE.md). Developers close anything that smells like AI, and
+the banned lists in that file are what the smell is. Give each row a
+`held_by_short` of eight words or fewer for the summary table; the full
+`held_by` is the detail.
+
 Mark **every row you write `source: drafted`**. You are producing a draft the
 user will refine with you — the register says so on its face, and the mark comes
 off a row when a person reviews it, never by rewording it. Draft boldly and
@@ -83,12 +89,11 @@ claim gets the three closed-loop tests run against it explicitly, one at a time.
 
 ### 4 · Report — the first screen has to land
 
-Write the classification to a YAML file. Before the table, write `key_findings`:
-the three to six things a reader should meet first, most consequential first. The
-first screen decides whether the rest gets read at all — a register that opens
-with methodology gets filed; one that opens with "a model call sits one file from
-`pip install`" gets acted on. Each finding is one or two sentences, names a file
-and line, and says why it matters. Lead with, in this order of precedence:
+Write the classification to a YAML file. Keep `summary` to one or two sentences —
+what the repo does, nothing else. Write `key_findings`: three to six, most
+consequential first, **each one or two short sentences naming a file and line**.
+The table opens the document; the findings follow it; a reader who stops there has
+the whole story. Lead with, in this order of precedence:
 
 1. Anything a model can reach that moves money, executes code, or grants access.
 2. A `held_by` that is honestly **nothing**.
@@ -119,9 +124,6 @@ Two fields in that file are easy to miss and carry a lot of the value:
 - **`excluded`** — every candidate you cleared, *with the reason*. Do not silently
   drop a false positive: a reader who runs the sweep themselves will see the same
   label and needs to know it was considered and why it was dismissed.
-
-Add `--layout sections` for anything destined for print or PDF; the six-column
-table is for a screen.
 
 **When you present the result in chat, open with the key findings** — not with
 what you did, not with the phase list, not with caveats. The caveats are already

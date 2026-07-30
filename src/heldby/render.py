@@ -27,6 +27,13 @@ from .scan import ScanReport
 CLASS_ORDER = ["read", "converse", "decide", "write"]
 CLASS_LABEL = {"read": "Read", "converse": "Converse", "decide": "Decide", "write": "Write"}
 
+CLASS_LINE = {
+    "read": "turns documents or messages into data. The output gets checked against something real.",
+    "converse": "answers the person who asked. It reaches nobody else and does nothing.",
+    "decide": "acts with no person on the fast path, inside deterministic bounds and a threshold.",
+    "write": "produces prose the system carries to someone else. A named person releases it.",
+}
+
 CLASS_RULE = {
     "read": "Turns a document or message into structured data. No person required — but the "
     "output is checked against something real: a column that exists in the file, an account "
@@ -64,9 +71,23 @@ class Process:
     #: names cannot see whether the register actually covers the code.
     files: list[str] = field(default_factory=list)
 
+    #: The table cell. The full held_by is the detail; this is what a developer
+    #: scans. Drafted short by whoever classified; falls back to the first
+    #: sentence of held_by.
+    held_by_short: str = ""
+
     @property
     def has_control(self) -> bool:
         return bool(self.held_by.strip())
+
+    @property
+    def cell(self) -> str:
+        if not self.has_control:
+            return "**nothing**"
+        if self.held_by_short.strip():
+            return self.held_by_short.strip().rstrip(".")
+        first = self.held_by.strip().split(". ")[0].rstrip(".")
+        return first if len(first) <= 90 else first[:87] + "…"
 
 
 @dataclass
@@ -217,131 +238,101 @@ def _aggregate_limits(scans: dict[str, ScanReport]) -> list[str]:
     return out
 
 
-def render_markdown(
-    register: Register, scans: dict[str, ScanReport], *, layout: str = "table"
-) -> str:
-    """`layout="sections"` for print; `"table"` for a screen. See the note below."""
+def render_markdown(register: Register, scans: dict[str, ScanReport]) -> str:
+    """The document a developer opens. The table is the product; it comes first.
+
+    Structure and prose follow VOICE.md. The framework essay lives in the README,
+    not here — a reader of the register gets four bullets and the table.
+    """
     out: list[str] = []
     generated = register.generated or date.today().strftime("%-d %B %Y")
-
     drafted = register.drafted
-    title_suffix = " — DRAFT" if drafted else ""
-    out.append(f"# AI register — {register.org}{title_suffix}")
+    processes = register.sorted_processes()
+
+    out.append(f"# AI register — {register.org}{' — DRAFT' if drafted else ''}")
     out.append("")
     if drafted:
         out.append(
-            f"> **Machine-drafted, awaiting review.** {len(drafted)} of "
-            f"{len(register.processes)} row(s) were drafted by a model reading the code and "
-            "have not been confirmed by a person. A drafted row is a starting point for a "
-            "conversation, not a claim of record — rows are marked † below, and the mark is "
-            "removed by reviewing the row, never by rewording it."
+            f"> Machine-drafted. {len(drafted)} of {len(register.processes)} rows are "
+            "unreviewed, marked †. Reviewing a row removes the mark; rewording it doesn't."
         )
         out.append("")
-    out.append(register.summary.strip())
+
+    out.append("There are four ways a repo can use AI:")
     out.append("")
+    for key in CLASS_ORDER:
+        out.append(f"- **{CLASS_LABEL[key]}** — {CLASS_LINE[key]}")
+    out.append("")
+    out.append(
+        "Risk rises left to right: Read < Converse < Decide < Write. A process spanning two "
+        "classes gets the stricter one. This report puts every AI call in this repo into one "
+        "of the four."
+    )
+    out.append("")
+
+    if register.summary.strip():
+        out.append(register.summary.strip())
+        out.append("")
+    files = sum(r.files_scanned for r in scans.values())
+    models = sum(len(r.model_sites) for r in scans.values())
+    actions = sum(len(r.action_sites) for r in scans.values())
+    out.append(
+        f"The sweep read {files} files and found {models} model call sites and "
+        f"{actions} protected-action call sites."
+    )
+    out.append("")
+
+    # --- the table -----------------------------------------------------------
+    out.append("| Process | Class | Held by |")
+    out.append("|---|---|---|")
+    for p in processes:
+        mark = " †" if p.source == "drafted" else ""
+        out.append(f"| `{p.name}`{mark} | {CLASS_LABEL.get(p.ai_class, p.ai_class)} | {_cell(p.cell)} |")
+    out.append("")
+    if drafted:
+        out.append("_† machine-drafted, unreviewed._")
+        out.append("")
+    gaps = [p for p in processes if not p.has_control]
+    if gaps:
+        out.append(f"**{len(gaps)} process(es) have nothing holding them.** The gap is the finding.")
+        out.append("")
+
     if register.key_findings:
-        out.append("## What you should know first")
+        out.append("## Worth knowing")
         out.append("")
         for i, finding in enumerate(register.key_findings, start=1):
             out.append(f"{i}. {finding.strip()}")
             out.append("")
-    out.append(
-        "Every place a model runs in this system, what class of use it is, and — the column "
-        "that matters — **what stands between the model's output and a real-world effect**."
-    )
-    out.append("")
 
-    # --- the framework, so the table can be read without a briefing ----------
-    out.append("## How to read this")
+    # --- the detail ----------------------------------------------------------
+    out.append("## The detail")
     out.append("")
-    out.append(
-        "Two questions get asked about AI and neither is useful. *Do you use AI?* — everyone "
-        "does. *How accurate is the model?* — unanswerable, and the wrong axis. The model will "
-        "be wrong at a rate nobody can drive to zero, so the question worth asking is **what it "
-        "can reach when it is**."
-    )
-    out.append("")
-    out.append("Each use is classified by its gate, not by its technology:")
-    out.append("")
-    out.append("| Class | The rule |")
-    out.append("|---|---|")
     for key in CLASS_ORDER:
-        out.append(f"| **{CLASS_LABEL[key]}** | {_cell(CLASS_RULE[key])} |")
-    out.append("")
-    out.append(
-        "Where a process spans two classes, **the stricter class governs** — Read < Converse "
-        "< Decide < Write. Two call sites using the same model on the same document belong to "
-        "different classes if what they can reach differs."
-    )
-    out.append("")
-
-    # --- the register itself --------------------------------------------------
-    # Two layouts, because the artefact has two audiences. A table is right on a
-    # screen, where a reader scans down the Held-by column comparing controls. It
-    # is wrong on paper: six columns whose last cell is a paragraph collapses into
-    # an unreadable ribbon at A4. The sections layout is the same content, one
-    # process at a time, for anything that gets printed or emailed as a PDF.
-    processes = register.sorted_processes()
-    out.append(f"## The register — {len(processes)} processes")
-    out.append("")
-
-    if layout == "sections":
-        for key in CLASS_ORDER:
-            group = [p for p in processes if p.ai_class == key]
-            if not group:
-                continue
-            out.append(f"### {CLASS_LABEL[key]} — {len(group)}")
-            out.append("")
-            out.append(f"_{CLASS_RULE[key]}_")
-            out.append("")
-            for p in group:
-                mark = " †" if p.source == "drafted" else ""
-                out.append(f"**`{p.name}`**{mark} · {p.model} · {p.repo}")
-                out.append("")
-                if p.does:
-                    out.append(p.does.strip())
-                    out.append("")
-                if p.reaches:
-                    out.append(f"*Reaches:* {', '.join(p.reaches)}")
-                    out.append("")
-                held = p.held_by.strip() if p.has_control else "**Nothing.**"
-                out.append(f"*Held by:* {held}")
-                out.append("")
-    else:
-        out.append("| Process | Class | Model | Component | Reaches | Held by |")
-        out.append("|---|---|---|---|---|---|")
-        for p in processes:
-            reaches = ", ".join(f"`{r}`" for r in p.reaches) if p.reaches else "—"
-            held = _cell(p.held_by) if p.has_control else "**nothing**"
+        group = [p for p in processes if p.ai_class == key]
+        if not group:
+            continue
+        out.append(f"### {CLASS_LABEL[key]} — {len(group)}")
+        out.append("")
+        for p in group:
             mark = " †" if p.source == "drafted" else ""
-            out.append(
-                f"| `{p.name}`{mark} | {CLASS_LABEL.get(p.ai_class, p.ai_class)} | `{p.model}` | "
-                f"{p.repo} | {reaches} | {held} |"
-            )
-        out.append("")
+            out.append(f"**`{p.name}`**{mark} · {p.model} · {p.repo}")
+            out.append("")
+            if p.does:
+                out.append(p.does.strip())
+                out.append("")
+            if p.reaches:
+                out.append(f"*Reaches:* {', '.join(p.reaches)}")
+                out.append("")
+            out.append(f"*Held by:* {p.held_by.strip() if p.has_control else '**Nothing.**'}")
+            out.append("")
 
-    if drafted:
-        out.append("_† machine-drafted and unreviewed._")
-        out.append("")
-
-    gaps = [p for p in processes if not p.has_control]
-    if gaps:
-        out.append(
-            f"**{len(gaps)} process(es) have nothing holding them.** They are listed above with "
-            "`nothing` in the last column rather than omitted, because a register that cannot "
-            "record a gap is a brochure."
-        )
-        out.append("")
-
-    # --- what each protected action rests on ---------------------------------
     if register.protected_actions:
-        out.append("## What holds each protected action")
+        out.append("## What this repo can and can't do")
         out.append("")
         for action, prose in register.protected_actions.items():
             out.append(f"- **{action}** — {prose.strip()}")
         out.append("")
 
-    # --- scope ---------------------------------------------------------------
     if register.scope_notes or register.excluded:
         out.append("## Scope")
         out.append("")
@@ -349,12 +340,9 @@ def render_markdown(
             out.append(note.strip())
             out.append("")
         if register.excluded:
-            out.append(
-                "These uses are **outside the scope above**. They are named rather than omitted: "
-                "a count reduced by quietly deleting rows is not a scope, it is a smaller number."
-            )
+            out.append("Outside scope, named rather than dropped:")
             out.append("")
-            out.append("| Outside scope | What it is | Why |")
+            out.append("| Item | What it is | Why it's out |")
             out.append("|---|---|---|")
             for item in register.excluded:
                 out.append(
@@ -363,79 +351,40 @@ def render_markdown(
                 )
             out.append("")
 
-    # --- the independent completeness check ----------------------------------
+    # --- completeness --------------------------------------------------------
     undeclared, unfound = _completeness(register, scans)
-    total_files = sum(r.files_scanned for r in scans.values())
-    total_models = sum(len(r.model_sites) for r in scans.values())
-    total_actions = sum(len(r.action_sites) for r in scans.values())
-
     unattributed = _unattributed_sites(register, scans)
-    out.append("## Independent completeness check")
+    out.append("## Completeness check")
     out.append("")
     out.append(
-        "The table above is generated from each component's own declaration. This section is "
-        "the other direction: an independent sweep of the source code, which knows nothing "
-        "about those declarations, looking for AI the register does not mention."
-    )
-    out.append("")
-    out.append(
-        f"**{total_files} source files** were read across {len(scans)} components. The sweep "
-        f"found **{total_models} model call sites** and **{total_actions} protected-action call "
-        f"sites**."
+        "An independent sweep, blind to the table above, looked for AI this register misses."
     )
     out.append("")
     if undeclared:
-        out.append(
-            f"**{len(undeclared)} AI process(es) found in the code that the register does not "
-            "declare.** This is a defect in the register, not a note for later:"
-        )
-        out.append("")
-        for name in undeclared:
-            out.append(f"- `{name}`")
-        out.append("")
+        out.append(f"**{len(undeclared)} process(es) in the code are not in this register:** "
+                   + ", ".join(f"`{n}`" for n in undeclared) + ". That is a register defect.")
     else:
-        out.append(
-            "**No undeclared AI process was found.** Every process the code labels itself with "
-            "appears in the register above, or in the out-of-scope table."
-        )
-        out.append("")
+        out.append("**No undeclared AI process found.** Every name the code uses is in the "
+                   "table or the out-of-scope list.")
+    out.append("")
     if unattributed:
-        out.append(
-            f"**{len(unattributed)} file(s) contain a model call that no row in this register "
-            "claims.** Label coverage asks whether every name found is written down; this asks "
-            "the question that matters — whether every place a model runs is accounted for. "
-            "A process that never names itself is invisible to the first check and caught by "
-            "this one:"
-        )
+        out.append(f"{len(unattributed)} file(s) contain a model call no row claims:")
         out.append("")
         for path in unattributed:
             out.append(f"- `{path}`")
         out.append("")
-
     if unfound:
         out.append(
-            f"{len(unfound)} declared process(es) could not be located by the sweep "
-            f"({', '.join(f'`{n}`' for n in unfound)}). **Check the names first**: the most "
-            "common cause is a register row named descriptively while the code labels itself "
-            "something else, which is a naming mismatch rather than a missing process — set "
-            "`covers` on the row to the labels the code actually uses. Where the names do "
-            "agree, this is a limit of the sweep and the declaration is the stronger source."
+            f"{len(unfound)} row(s) could not be located from the code alone "
+            f"({', '.join(f'`{n}`' for n in unfound)}) — usually a naming mismatch. "
+            "Set `covers` or `files` on the row."
         )
         out.append("")
 
-    # --- limits --------------------------------------------------------------
-    out.append("## What this analysis cannot see")
-    out.append("")
-    out.append(
-        "A proof that names its own limits is the only kind worth publishing. Everything below "
-        "is a real boundary on the claim made above, stated so that a reader can judge the "
-        "claim rather than take it."
-    )
+    out.append("## What this can't see")
     out.append("")
     for limit in _aggregate_limits(scans):
         out.append(f"- {limit}")
-    out.append("")
-    out.append("This register is not a compliance certification and is not legal advice.")
     out.append("")
 
     out.append("---")
@@ -443,6 +392,7 @@ def render_markdown(
     digests = sorted({f"{p['id']}@{p['digest']}" for r in scans.values() for p in r.provenance})
     out.append(
         f"_Generated {generated} by [heldby](https://github.com/receipting/heldby). "
+        f"Not taint analysis, not a certification, not legal advice. "
         f"Detection surface: {', '.join(digests)}._"
     )
     out.append("")
@@ -466,6 +416,7 @@ def render_json(register: Register, scans: dict[str, ScanReport]) -> dict:
                 "covers": p.covers,
                 "files": p.files,
                 "held_by": p.held_by,
+                "held_by_short": p.cell,
                 "has_control": p.has_control,
                 "source": p.source,
             }

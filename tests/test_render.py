@@ -84,7 +84,7 @@ def test_an_undeclared_process_is_named_as_a_register_defect(scans):
     payload = render_json(_register([GOOD]), scans)
     undeclared = payload["completeness"]["undeclared_processes"]
     assert undeclared, "the py-messy fixture labels processes the register omits"
-    assert "defect in the register" in markdown
+    assert "register defect" in markdown
     for name in undeclared:
         assert name in markdown
 
@@ -97,14 +97,14 @@ def test_no_undeclared_process_reads_as_a_clean_finding(scans):
         for n in found
     ]
     markdown = render_markdown(_register(processes), scans)
-    assert "No undeclared AI process was found" in markdown
+    assert "No undeclared AI process found" in markdown
 
 
 def test_out_of_scope_uses_are_named_not_omitted(scans):
     excluded = [{"name": "ci-reviewer", "what": "Reads our own source.", "why": "Dev tooling."}]
     markdown = render_markdown(_register([GOOD], excluded=excluded), scans)
     assert "ci-reviewer" in markdown
-    assert "not a scope, it is a smaller number" in markdown
+    assert "named rather than dropped" in markdown
 
 
 def test_the_register_always_refuses_the_taint_reading(scans):
@@ -173,7 +173,7 @@ def test_an_unlocated_row_blames_naming_first(scans):
         ai_class="read", model="m", repo="x", does="d", held_by="h",
     )
     markdown = render_markdown(_register([ghost]), scans)
-    assert "Check the names first" in markdown
+    assert "naming mismatch" in markdown
     assert "`covers`" in markdown
 
 
@@ -187,7 +187,7 @@ def test_a_model_call_no_row_claims_is_reported(scans):
     payload = render_json(_register([GOOD]), scans)
     unattributed = payload["completeness"]["unattributed_model_sites"]
     assert unattributed, "the fixtures contain model calls no row claims"
-    assert "no row in this register claims" in render_markdown(_register([GOOD]), scans)
+    assert "a model call no row claims" in render_markdown(_register([GOOD]), scans)
 
 
 def test_a_row_claiming_its_files_is_located_without_a_label(scans):
@@ -222,7 +222,7 @@ def test_a_drafted_register_says_so_before_anything_else(scans):
     guess into a register — so the banner leads, and every drafted row is marked.
     """
     markdown = render_markdown(_register([GOOD, DRAFT]), scans)
-    banner = markdown.index("Machine-drafted, awaiting review")
+    banner = markdown.index("Machine-drafted.")
     first_row = markdown.index("`invoice-extraction`")
     assert banner < first_row, "the banner must come before any row"
     assert "— DRAFT" in markdown.splitlines()[0]
@@ -241,9 +241,10 @@ def test_key_findings_lead_the_document(scans):
     register = _register([GOOD])
     register.key_findings = ["**The one that matters.** A model call sits one file from money."]
     markdown = render_markdown(register, scans)
-    findings = markdown.index("What you should know first")
-    table = markdown.index("## The register")
-    assert findings < table
+    table = markdown.index("| Process | Class | Held by |")
+    findings = markdown.index("## Worth knowing")
+    detail = markdown.index("## The detail")
+    assert table < findings < detail, "table first, findings second, detail last"
     assert "one file from money" in markdown
 
 

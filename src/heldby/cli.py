@@ -401,6 +401,7 @@ def cmd_register(args: argparse.Namespace) -> int:
                 reaches=list(raw.get("reaches") or []),
                 source=raw.get("source", "declared"),
                 covers=list(raw.get("covers") or []),
+                held_by_short=raw.get("held_by_short", ""),
                 files=list(raw.get("files") or []),
             )
         )
@@ -432,7 +433,7 @@ def cmd_register(args: argparse.Namespace) -> int:
         generated=spec.get("generated", ""),
     )
 
-    markdown = render_markdown(register, scans, layout=args.layout)
+    markdown = render_markdown(register, scans)
     payload = render_json(register, scans)
 
     if args.out_md:
@@ -670,12 +671,6 @@ def main(argv: list[str] | None = None) -> int:
     reg.add_argument("--out-md", metavar="FILE", help="write the human register here")
     reg.add_argument("--out-json", metavar="FILE", help="write the machine register here")
     reg.add_argument("--json", action="store_true", help="print JSON instead of markdown")
-    reg.add_argument(
-        "--layout",
-        choices=("table", "sections"),
-        default="table",
-        help="table for a screen; sections for print, where a 6-column table collapses",
-    )
     reg.add_argument(
         "--fail-on-gap",
         action="store_true",
