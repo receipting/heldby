@@ -8,22 +8,78 @@ questionnaire, or publish as a trust-centre page.
 The four-class framework below was developed at [receipting.ai](https://receipting.ai) to
 govern its own estate. The tool is MIT-licensed; so is the framework. Use both.
 
-## Install
+## Run it on your own repo
 
-As a Claude Code plugin — this is the way you want it, because classification needs a
-model reading your code:
+You need [`uv`](https://docs.astral.sh/uv/). Your repo needs **nothing** — no dependencies
+installed, no build step, no config — and heldby never writes to it unless you run `adopt`.
+
+### The full audit — inventory, classes, and a register
+
+Classification means reading the code around each call site, so that half runs in
+[Claude Code](https://claude.com/claude-code):
 
 ```
 /plugin marketplace add receipting/heldby
+```
+
+```
 /plugin install heldby@heldby
 ```
 
-Or use the deterministic half on its own, with no install:
+Then, from your repo, invoke it by name:
+
+```
+/heldby
+```
+
+…or just ask, and it triggers on its own:
+
+> Build me an AI register for this repo.
+
+It runs the sweep, reads the code around every candidate site, adversarially checks its own
+classifications, and writes `ai-register.md` and `ai-register.json`. Expect questions — a
+control it cannot find in the code is a question, not an assumption.
+
+### The inventory alone — no Claude Code needed
+
+The deterministic half is an ordinary CLI:
 
 ```bash
-uvx heldby scan .          # find every place a model might run
-uvx heldby catalog         # print the entire detection surface
+uvx --from git+https://github.com/receipting/heldby heldby scan .
 ```
+
+That prints every candidate model call site, every protected action near it, what the code
+calls its own AI features, and — read this part first — what the sweep could not see. Add
+`--json` to pipe it somewhere.
+
+Same form for the others, e.g. to check the detection surface is not stale:
+
+```bash
+uvx --from git+https://github.com/receipting/heldby heldby catalog --check-registries
+```
+
+To put it on your PATH instead:
+
+```bash
+uv tool install git+https://github.com/receipting/heldby
+```
+
+…after which it is just `heldby scan .`. (Not on PyPI yet, hence the git URL.)
+
+### In CI
+
+`scan`, `lint` and `register` are deterministic and exit non-zero on a finding, so they can
+gate a build:
+
+```yaml
+- run: uvx --from git+https://github.com/receipting/heldby heldby lint .
+```
+
+Run `heldby adopt .` first to seed the config and the baseline — without them the gate has
+nothing to enforce, and it says so rather than passing.
+
+Classification deliberately does **not** belong in CI. It is a reviewed artefact that CI
+checks is current, never something re-inferred on every push.
 
 ---
 
@@ -165,8 +221,11 @@ Detection is driven by data, not by prose baked into a prompt, so it can be exte
 pull request without touching any logic.
 
 ```bash
-uvx heldby catalog                     # print the entire detection surface
-uvx heldby catalog --check-registries  # resolve every package name against npm and PyPI
+# print the entire detection surface
+uvx --from git+https://github.com/receipting/heldby heldby catalog
+
+# resolve every catalogued package name against npm and PyPI
+uvx --from git+https://github.com/receipting/heldby heldby catalog --check-registries
 ```
 
 Two design rules make the catalogue trustworthy:
