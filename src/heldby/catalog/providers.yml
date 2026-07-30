@@ -622,3 +622,64 @@ rules:
       symbol: ["SentenceTransformer", "CrossEncoder"]
     note: >
       Local embedding and reranking models, the in-process counterpart to openai.embeddings. The import uses an underscore and the distribution a hyphen. The model is usually named as a positional string, so no model_arg is claimed.
+
+  - id: cerebras.chat
+    kind: model
+    imports:
+      py: ["cerebras.cloud.sdk"]
+    registry:
+      pypi: ["cerebras-cloud-sdk"]
+    match:
+      construct: true
+      symbol: ["Cerebras", "AsyncCerebras"]
+    note: >
+      Cerebras inference through the vendor's own client rather than the openai package. The import is dotted (cerebras.cloud.sdk) while the distribution is hyphenated, so neither name follows from the other. Matches construction because the call chain is chat.completions.create, which is indistinguishable from an OpenAI call once the client sits in a variable; the npm counterpart is not covered here.
+  - id: provider.cerebras
+    kind: model
+    match:
+      url_literal: ["api.cerebras.ai"]
+    note: >
+      The Cerebras host as a configured base URL, which is the more common shape: an openai client pointed at api.cerebras.ai leaves no Cerebras import anywhere in the repo.
+  - id: zai.chat
+    kind: model
+    imports:
+      py: ["zai"]
+    registry:
+      pypi: ["zai-sdk"]
+    match:
+      construct: true
+      symbol: ["ZaiClient", "ZhipuAiClient"]
+    model_arg: model
+    note: >
+      Z.ai / Zhipu GLM models through the vendor's own SDK. The import is `zai` and the distribution `zai-sdk`; the two client classes differ only in which endpoint they reach, international or mainland China. Construction is matched because the call chain, chat.completions.create, is shared with every OpenAI-compatible client. The older `zhipuai` distribution is a different name and is not covered by this rule.
+  - id: dashscope.generation
+    kind: model
+    imports:
+      py: ["dashscope"]
+    registry:
+      pypi: ["dashscope"]
+    match:
+      symbol: ["Generation", "AioGeneration"]
+    model_arg: model
+    note: >
+      Alibaba Qwen models through DashScope's native Python API, whose call shape is Generation.call(model=...) rather than any OpenAI-compatible chain, so no existing member rule sees it. The DashScope host is already caught as a configured base URL by provider.qwen; this rule covers the SDK used with no URL in the source. The package's OpenAI-compatible submodule and its multimodal entry points are not covered here.
+  - id: aisdk.providers.more
+    kind: model
+    imports:
+      ts: ["@ai-sdk/google-vertex", "@ai-sdk/cerebras", "@ai-sdk/deepinfra", "@ai-sdk/baseten", "@ai-sdk/alibaba", "@ai-sdk/vercel", "@ai-sdk/fal", "@ai-sdk/elevenlabs", "@ai-sdk/deepgram"]
+    registry:
+      npm: ["@ai-sdk/google-vertex", "@ai-sdk/cerebras", "@ai-sdk/deepinfra", "@ai-sdk/baseten", "@ai-sdk/alibaba", "@ai-sdk/vercel", "@ai-sdk/fal", "@ai-sdk/elevenlabs", "@ai-sdk/deepgram"]
+    match:
+      symbol: ["vertex", "createVertex", "cerebras", "deepinfra", "baseten", "alibaba", "vercel", "fal", "elevenlabs", "deepgram"]
+    note: >
+      AI SDK provider packages published alongside the fifteen already catalogued, added as a separate rule so the existing aisdk.providers match is untouched. @ai-sdk/google-vertex is the notable one: Vertex-hosted Google models in TypeScript had no entry at all. Every package name here was resolved against npm; the exported factory symbols follow the AI SDK's lowercase-provider convention and were NOT read from each package's own README, so a package that names its export differently will be caught by its import but not by symbol. elevenlabs, deepgram and fal are speech and image models, not chat.
+  - id: langchain.chat.models.partners
+    kind: model
+    imports:
+      py: ["langchain_xai", "langchain_perplexity", "langchain_fireworks", "langchain_huggingface", "langchain_nvidia_ai_endpoints"]
+    registry:
+      pypi: ["langchain-xai", "langchain-perplexity", "langchain-fireworks", "langchain-huggingface", "langchain-nvidia-ai-endpoints"]
+    match:
+      symbol: ["ChatXAI", "ChatPerplexity", "ChatFireworks", "ChatHuggingFace", "HuggingFaceEndpoint", "ChatNVIDIA"]
+    note: >
+      LangChain partner distributions whose module names no existing rule lists. langchain.chat.models already carries ChatXAI, ChatPerplexity and ChatFireworks as symbols but not the modules they are imported from, so a repo using them was matched by neither import nor package name. Only `from langchain_xai import ChatXAI` was read from a package page; the other class names follow LangChain's Chat<Vendor> convention and each distribution name was resolved against PyPI.
