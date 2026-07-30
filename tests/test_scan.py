@@ -221,3 +221,106 @@ def test_scan_is_deterministic(cat):
     first = scan(FIXTURES / "ts-messy", cat).as_dict()
     second = scan(FIXTURES / "ts-messy", cat).as_dict()
     assert first == second
+
+
+def test_notebook_code_cells_are_scanned(cat, tmp_path):
+    """Whole categories of AI work live in notebooks.
+
+    Before this, .ipynb matched no extension, so a Jupyter-first AI repo reported
+    "no AI" — and did so SILENTLY, since the files were never even counted as
+    skipped.
+    """
+    import json as _json
+
+    (tmp_path / "analysis.ipynb").write_text(
+        _json.dumps({
+            "cells": [
+                {"cell_type": "markdown", "source": ["# not code\n"]},
+                {"cell_type": "code", "source": ["import anthropic\n",
+                                                 "c = anthropic.Anthropic()\n",
+                                                 "c.messages.create(model='claude-opus-4-8')\n"]},
+            ]
+        }),
+        encoding="utf-8",
+    )
+    report = scan(tmp_path, cat)
+    assert "anthropic.messages" in {s.rule_id for s in report.sites}
+    assert any("notebook" in limit.lower() for limit in report.limits)
+
+
+def test_notebook_outputs_are_never_read(cat, tmp_path):
+    """A cached output can contain anything, and none of it is code that runs."""
+    import json as _json
+
+    (tmp_path / "out.ipynb").write_text(
+        _json.dumps({
+            "cells": [{
+                "cell_type": "code",
+                "source": ["print(1)\n"],
+                "outputs": [{"text": ["client.messages.create(model='claude-opus-4-8')\n"]}],
+            }]
+        }),
+        encoding="utf-8",
+    )
+    report = scan(tmp_path, cat)
+    assert "anthropic.messages" not in {s.rule_id for s in report.sites}
+
+
+def test_chat_role_values_are_not_processes(cat, tmp_path):
+    """`role: "user"` appears in every messages array ever written."""
+    (tmp_path / "chat.py").write_text(
+        'messages = [{"role": "user", "content": x}, {"role": "assistant", "content": y}]\n'
+        'profile: str = "Architect"\n',
+        encoding="utf-8",
+    )
+    report = scan(tmp_path, cat)
+    found = {n for names in report.labels.values() for n in names}
+    assert "Architect" in found, "an agent framework's profile IS a process name"
+    assert not ({"user", "assistant"} & found)
+
+
+def test_a_litellm_import_is_not_a_proxy(cat, tmp_path):
+    """Measured across ten real repositories: the old bare-"litellm" match fired
+    33 times with zero true positives — every hit an import, a UI component name
+    or a dropdown entry. False-red bias is deliberate, but a rule that is only
+    ever wrong teaches readers to skim past the whole section."""
+    (tmp_path / "a.py").write_text("from aider.llm import litellm\n", encoding="utf-8")
+    (tmp_path / "b.py").write_text('PROVIDERS = ["litellm", "openai"]\n', encoding="utf-8")
+    report = scan(tmp_path, cat)
+    assert "gateway.litellm-proxy" not in {s.rule_id for s in report.sites}
+
+
+def test_a_real_litellm_proxy_url_still_fires(cat, tmp_path):
+    (tmp_path / "c.py").write_text(
+        'client = OpenAI(base_url="http://localhost:4000/v1")\n', encoding="utf-8"
+    )
+    report = scan(tmp_path, cat)
+    assert "gateway.litellm-proxy" in {s.rule_id for s in report.sites}
+
+
+def test_a_reexported_package_is_still_an_import(cat, tmp_path):
+    """`from aider.llm import litellm` — a heavy dependency behind a local shim so
+    the import can be deferred. Without this the main model call of a 47k-star
+    coding agent is invisible: `litellm.completion(...)` sits in plain sight while
+    no file in the repo appears to import litellm at all."""
+    (tmp_path / "shim.py").write_text("import litellm\n", encoding="utf-8")
+    (tmp_path / "models.py").write_text(
+        "from shim import litellm\n\ndef go(**kw):\n    return litellm.completion(**kw)\n",
+        encoding="utf-8",
+    )
+    report = scan(tmp_path, cat)
+    hit = [s for s in report.sites if s.rule_id == "litellm.completion" and s.file == "models.py"]
+    assert hit, "the call site must be found, not only the shim"
+
+
+def test_a_deferred_import_by_string_counts(cat, tmp_path):
+    """importlib.import_module("litellm") keeps a slow package off the startup
+    path. It is a real import whose only trace is a string literal."""
+    (tmp_path / "lazy.py").write_text(
+        'import importlib\n'
+        'litellm = importlib.import_module("litellm")\n'
+        'r = litellm.completion(model="gpt-4o")\n',
+        encoding="utf-8",
+    )
+    report = scan(tmp_path, cat)
+    assert "litellm.completion" in {s.rule_id for s in report.sites}

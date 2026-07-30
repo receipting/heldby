@@ -38,6 +38,12 @@ from .schema import Rule
 
 TS_EXT = {".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".mts", ".cts"}
 PY_EXT = {".py", ".pyi"}
+#: Jupyter notebooks are read as Python. Whole categories of AI work — finance,
+#: research, anything data-science shaped — live primarily in notebooks, and a
+#: sweep that skips them reports "no AI" over a repository that is nothing but AI.
+#: Worse, it did so SILENTLY until this was added: the files matched no extension,
+#: so they were never even counted as skipped.
+NB_EXT = {".ipynb"}
 
 #: Directories never worth reading. Each is either not the target's own code or a
 #: build artefact of it, and scanning them buries the repo's own sites under
@@ -83,7 +89,22 @@ NETWORK_HINT = re.compile(
 LABEL_KEYS = (
     "process", "feature", "run_name", "runName", "span_name", "spanName",
     "operation_name", "operationName", "task", "agent_name", "agentName",
+    # Agent frameworks name their agents with `profile`, which is how a
+    # twenty-role multi-agent framework can declare every one of them and still
+    # look unlabelled to a sweep that only knows about observability metadata.
+    "profile",
 )
+
+#: Values that match the label shape but are never a process. `role: "user"` and
+#: `role: "assistant"` appear in every chat-messages array ever written, and a
+#: register listing "user" and "system" as AI processes is not one anybody reads
+#: twice.
+LABEL_STOPLIST = frozenset({
+    "user", "assistant", "system", "tool", "function", "human", "ai", "model",
+    "developer", "bot", "agent", "none", "default", "true", "false", "null",
+    "prompt", "message", "content", "text", "json", "string", "object", "input",
+    "output", "error", "unknown", "test", "example", "name", "id", "key", "value",
+})
 #: Matches three shapes, because real code uses all three:
 #:   process: 'matching'                        an inline object property
 #:   process = 'matching'                       a plain assignment
@@ -239,6 +260,33 @@ class ScanReport:
 # --- import extraction ------------------------------------------------------
 
 
+def notebook_source(text: str) -> str | None:
+    """The code cells of a Jupyter notebook, concatenated.
+
+    Markdown and raw cells are dropped; outputs are never read, because a cached
+    output can contain anything and none of it is code that runs. Line numbers in
+    a notebook finding refer to this concatenation rather than to the .ipynb file,
+    which is a JSON document nobody reads by line — the report says so.
+    """
+    try:
+        doc = json.loads(text)
+    except ValueError:
+        return None
+    if not isinstance(doc, dict) or "cells" not in doc:
+        return None
+
+    out: list[str] = []
+    for cell in doc.get("cells") or []:
+        if not isinstance(cell, dict) or cell.get("cell_type") != "code":
+            continue
+        source = cell.get("source")
+        if isinstance(source, list):
+            out.append("".join(s for s in source if isinstance(s, str)))
+        elif isinstance(source, str):
+            out.append(source)
+    return "\n".join(out) if out else None
+
+
 def _py_imports(text: str) -> tuple[set[str], bool]:
     """Import specifiers from Python source, via the standard library parser.
 
@@ -265,12 +313,26 @@ def _py_imports(text: str) -> tuple[set[str], bool]:
             found.add(node.module)
             for alias in node.names:
                 found.add(f"{node.module}.{alias.name}")
+        elif isinstance(node, ast.Call):
+            # importlib.import_module("litellm") — a deferred import, used
+            # routinely to keep a slow package off the startup path. It is a real
+            # import and the only trace of it is a string literal.
+            func = node.func
+            name = getattr(func, "attr", None) or getattr(func, "id", None)
+            if name in {"import_module", "__import__"} and node.args:
+                first = node.args[0]
+                if isinstance(first, ast.Constant) and isinstance(first.value, str):
+                    found.add(first.value)
     return found, False
 
 
 TS_IMPORT_RE = re.compile(
     r"""(?:\bfrom\s*|\bimport\s*|\brequire\s*\(\s*|\bimport\s*\(\s*)["']([^"']+)["']"""
 )
+#: Named bindings — `import { openai, anthropic } from './providers'`. The same
+#: re-export shape as Python's, and the binding name is the only tell that a
+#: catalogued package is what is being reached through the local module.
+TS_BINDING_RE = re.compile(r"\bimport\s*\{([^}]{1,300})\}\s*from")
 
 
 def _import_hit(specifier: str, names: tuple[str, ...]) -> bool:
@@ -284,6 +346,17 @@ def _import_hit(specifier: str, names: tuple[str, ...]) -> bool:
         if specifier == name:
             return True
         if specifier.startswith(name) and len(specifier) > len(name) and specifier[len(name)] in "./":
+            return True
+        # A RE-EXPORT: `from aider.llm import litellm` gives the specifier
+        # `aider.llm.litellm`, whose leaf is the catalogued package. Modules
+        # commonly re-export a heavy dependency behind a local shim so the import
+        # can be deferred, and the call site then imports the shim rather than the
+        # package. Without this the main model call of a 47k-star coding agent is
+        # invisible: `litellm.completion(**kwargs)` sits in plain sight while no
+        # file in the repo appears to import litellm at all.
+        if "." in specifier and specifier.rsplit(".", 1)[-1] == name:
+            return True
+        if "/" in specifier and specifier.rsplit("/", 1)[-1] == name:
             return True
     return False
 
@@ -381,6 +454,7 @@ def scan(
     skipped: dict[str, int] = {}
     languages: dict[str, int] = {}
     unparsed: list[str] = []
+    notebooks = 0
     file_imports: dict[str, set[str]] = {}
 
     for path in sorted(root.rglob("*")):
@@ -393,7 +467,7 @@ def scan(
         suffix = path.suffix.lower()
         if suffix in TS_EXT:
             ecosystem = "ts"
-        elif suffix in PY_EXT:
+        elif suffix in PY_EXT or suffix in NB_EXT:
             ecosystem = "py"
         else:
             continue
@@ -403,6 +477,13 @@ def scan(
                 skipped["too-large"] = skipped.get("too-large", 0) + 1
                 continue
             text = path.read_text(encoding="utf-8", errors="replace")
+            if suffix in NB_EXT:
+                extracted = notebook_source(text)
+                if extracted is None:
+                    skipped["unreadable-notebooks"] = skipped.get("unreadable-notebooks", 0) + 1
+                    continue
+                text = extracted
+                notebooks += 1
         except OSError:
             skipped["unreadable"] = skipped.get("unreadable", 0) + 1
             continue
@@ -428,6 +509,11 @@ def scan(
                 unparsed.append(rel)
         else:
             imports = set(TS_IMPORT_RE.findall(text))
+            for group in TS_BINDING_RE.findall(text):
+                for binding in group.split(","):
+                    leaf = binding.split(" as ")[0].strip()
+                    if leaf and leaf.isidentifier():
+                        imports.add(leaf)
 
         file_imports[rel] = imports
         network_idents = _network_identifiers(lines)
@@ -482,12 +568,12 @@ def scan(
                     )
                     break  # one site per rule per way-of-firing per file
 
-        for match in LABEL_RE.finditer(text):
-            labels.setdefault(rel, set()).add(match.group(1))
-        for match in NODE_RE.finditer(text):
-            labels.setdefault(rel, set()).add(match.group(1))
-        for match in REGISTRY_LOOKUP_RE.finditer(text):
-            labels.setdefault(rel, set()).add(match.group(1))
+        for pattern in (LABEL_RE, NODE_RE, REGISTRY_LOOKUP_RE):
+            for match in pattern.finditer(text):
+                value = match.group(1).strip()
+                if value.lower() in LABEL_STOPLIST:
+                    continue
+                labels.setdefault(rel, set()).add(value)
 
     dependencies = _dependencies(root, catalog, file_imports)
 
@@ -533,6 +619,18 @@ def scan(
             f"A gateway ({', '.join(gateways)}) appears in config but no confirmed call routes "
             "through it, so no bypass claim is made. It reads as one provider option among "
             "several rather than a mandated path."
+        )
+    if notebooks:
+        limits.append(
+            f"{notebooks} Jupyter notebook(s) were read as Python, from their code cells only. "
+            "Line numbers for a notebook finding refer to those cells concatenated, not to a "
+            "line of the .ipynb file. Cell OUTPUTS were not read — a cached output can contain "
+            "anything and none of it is code that runs."
+        )
+    if skipped.get("unreadable-notebooks"):
+        limits.append(
+            f"{skipped['unreadable-notebooks']} .ipynb file(s) could not be parsed as notebooks "
+            "and were not scanned."
         )
     if skipped.get("nested-checkouts"):
         limits.append(

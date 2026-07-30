@@ -61,6 +61,16 @@ def _load_catalog_at_ref(ref: str, directory: Path) -> Catalog:
         return catalog_mod.load(tmpdir)
 
 
+def _surface() -> str:
+    """One line naming the exact detection surface this install carries."""
+    try:
+        cat = catalog_mod.load()
+    except CatalogError as exc:  # a broken catalogue must still be visible here
+        return f"catalogue: WILL NOT LOAD — {exc}"
+    files = ", ".join(f"{f.id}@{f.digest[:8]}" for f in cat.files)
+    return f"catalogue: {len(cat.rules)} rules — {files}"
+
+
 def _repo_root(start: Path) -> Path:
     result = subprocess.run(
         ["git", "rev-parse", "--show-toplevel"],
@@ -569,7 +579,14 @@ def main(argv: list[str] | None = None) -> int:
         prog="heldby",
         description="Find every place AI runs in a codebase, and name what holds it.",
     )
-    parser.add_argument("--version", action="version", version=f"heldby {__version__}")
+    # The catalogue digest rides along with the version on purpose. An install
+    # can go stale without any outward sign — a reinstall that silently reuses a
+    # cached build leaves you scanning with an old detection surface and no way to
+    # tell from the output. "Which rules am I actually running" has to be
+    # answerable in one command, or the answer is "whichever ones you assumed".
+    parser.add_argument(
+        "--version", action="version", version=f"heldby {__version__}\n{_surface()}"
+    )
     sub = parser.add_subparsers(dest="command", required=True)
 
     cat = sub.add_parser("catalog", help="print or check the detection surface")
