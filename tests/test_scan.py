@@ -400,3 +400,16 @@ def test_prose_in_a_comment_is_not_a_finding(cat, tmp_path):
     )
     hits = [s for s in scan(tmp_path, cat).sites if s.action == "execute-code"]
     assert not hits, f"unexpected: {[(s.rule_id, s.evidence) for s in hits]}"
+
+
+def test_profile_takes_no_suffix(cat, tmp_path):
+    """`profile:` names an agent; `profileId` is an export profile and
+    `profile_name` is an AWS credentials profile. The suffix pattern put both into
+    a customer-facing register as AI processes, and the completeness gate caught
+    it on the first regeneration after the `profile` key was added."""
+    (tmp_path / "a.ts").write_text("const x = { profileId: 'internal-control-v1' }\n", encoding="utf-8")
+    (tmp_path / "b.py").write_text('session = boto3.Session(profile_name="r2")\n', encoding="utf-8")
+    (tmp_path / "c.py").write_text('profile: str = "Architect"\n', encoding="utf-8")
+    found = {n for names in scan(tmp_path, cat).labels.values() for n in names}
+    assert "Architect" in found
+    assert not ({"internal-control-v1", "r2"} & found)

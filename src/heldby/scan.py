@@ -121,11 +121,14 @@ NETWORK_HINT = re.compile(
 LABEL_KEYS = (
     "process", "feature", "run_name", "runName", "span_name", "spanName",
     "operation_name", "operationName", "task", "agent_name", "agentName",
-    # Agent frameworks name their agents with `profile`, which is how a
-    # twenty-role multi-agent framework can declare every one of them and still
-    # look unlabelled to a sweep that only knows about observability metadata.
-    "profile",
 )
+
+#: Keys matched EXACTLY, with no suffix. Agent frameworks name their agents with
+#: `profile:` — but `profileId` is an export profile and `profile_name` is an AWS
+#: credentials profile, and letting the suffix pattern near this key put both into
+#: a customer-facing register as AI processes. The completeness gate caught it on
+#: the first regeneration after the key was added.
+LABEL_KEYS_EXACT = ("profile",)
 
 #: Values that match the label shape but are never a process. `role: "user"` and
 #: `role: "assistant"` appear in every chat-messages array ever written, and a
@@ -163,8 +166,8 @@ LABEL_STOPLIST = frozenset({
 #: literal, so a naive `key[:=]"value"` pattern stops dead at the annotation. Each of
 #: these misses was one real declared process silently absent from the register.
 LABEL_RE = re.compile(
-    r"[\"'`]?\b(?:" + "|".join(sorted(LABEL_KEYS, key=len, reverse=True)) + r")"
-    r"(?:_?(?:tag|name|id|key|label))?\b[\"'`]?\s*"
+    r"[\"'`]?\b(?:(?:" + "|".join(sorted(LABEL_KEYS, key=len, reverse=True)) + r")"
+    r"(?:_?(?:tag|name|id|key|label))?|" + "|".join(LABEL_KEYS_EXACT) + r")\b[\"'`]?\s*"
     r"(?::\s*[\w.$<>\[\]|]+(?:\s*\|\s*[\w.$<>\[\]|]+)*)?\s*"
     r"[:=]\s*[\"'`]([A-Za-z0-9][\w.\- ]{1,60})[\"'`]",
     re.IGNORECASE,

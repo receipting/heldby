@@ -41,6 +41,11 @@ furthermore, moreover, ultimately, in summary, arguably, perhaps, hopefully.
 
 ## The register's own rules
 
+- **Talk about the repo, not the report.** A finding states what the code does.
+  The report never narrates its own editorial choices — "not credited as a
+  control in this register" tells the reader nothing about the code. Say the fact
+  instead: "the reviewers are models too". The report may describe itself in
+  exactly two places: the draft banner and the completeness check.
 - A gap says **nothing**. Never "under review", "planned", or "mitigated by
   design". The gap is the finding.
 - A capability statement beats a reassurance. "This repo cannot move money" is
