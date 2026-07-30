@@ -1,0 +1,112 @@
+<svg viewBox="0 0 1180 372" xmlns="http://www.w3.org/2000/svg" role="img"
+           aria-label="The AR pipeline: email arrives, categorise, extract, match, allocate or hold, chase and resolve — each stage labelled with its AI class and what stands between it and the world"><rect width="1180" height="372" fill="#ffffff"/>
+        <defs>
+          <marker id="a2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="#a7adbf"/>
+          </marker>
+          <style>
+            .f2 text{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif}
+            .f2 .pill{font-size:11.5px;font-weight:800;letter-spacing:.07em}
+            .f2 .bt{font-size:17px;font-weight:800;fill:#1d1d2b}
+            .f2 .bs{font-size:12.5px;fill:#5a5a70}
+            .f2 .gl{font-size:10.5px;font-weight:800;letter-spacing:.09em;fill:#8b8ba0}
+            .f2 .gd{font-size:13px;fill:#3a3a4d}
+            .f2 .edge{stroke:#a7adbf;stroke-width:2;fill:none}
+          </style>
+        </defs>
+        <g class="f2">
+          <!-- ===== stage 1 ===== -->
+          <rect x="42" y="8" width="92" height="26" rx="13" fill="#eef1f5"/>
+          <text class="pill" x="88" y="25" text-anchor="middle" fill="#64748b">NO MODEL</text>
+          <rect x="0" y="48" width="176" height="100" rx="11" fill="#f7f8fa" stroke="#cfd4dd" stroke-width="1.5"/>
+          <text class="bt" x="88" y="82" text-anchor="middle">Email arrives</text>
+          <text class="bs" x="88" y="105" text-anchor="middle">broker mailbox,</text>
+          <text class="bs" x="88" y="123" text-anchor="middle">PDF / CSV / spreadsheet</text>
+          <line class="edge" x1="178" y1="98" x2="199" y2="98" marker-end="url(#a2)"/>
+
+          <!-- ===== stage 2 ===== -->
+          <rect x="243" y="8" width="92" height="26" rx="13" fill="#e0f2f1"/>
+          <text class="pill" x="289" y="25" text-anchor="middle" fill="#0f766e">READ</text>
+          <rect x="201" y="48" width="176" height="100" rx="11" fill="#e0f2f1" stroke="#0f766e" stroke-width="1.5"/>
+          <text class="bt" x="289" y="82" text-anchor="middle">Categorise</text>
+          <text class="bs" x="289" y="105" text-anchor="middle">remittance? closing?</text>
+          <text class="bs" x="289" y="123" text-anchor="middle">a reply? noise?</text>
+          <line class="edge" x1="379" y1="98" x2="400" y2="98" marker-end="url(#a2)"/>
+
+          <!-- ===== stage 3 ===== -->
+          <rect x="444" y="8" width="92" height="26" rx="13" fill="#e0f2f1"/>
+          <text class="pill" x="490" y="25" text-anchor="middle" fill="#0f766e">READ</text>
+          <rect x="402" y="48" width="176" height="100" rx="11" fill="#e0f2f1" stroke="#0f766e" stroke-width="1.5"/>
+          <text class="bt" x="490" y="82" text-anchor="middle">Extract</text>
+          <text class="bs" x="490" y="105" text-anchor="middle">lines, amounts,</text>
+          <text class="bs" x="490" y="123" text-anchor="middle">policy numbers, account</text>
+          <line class="edge" x1="580" y1="98" x2="601" y2="98" marker-end="url(#a2)"/>
+
+          <!-- ===== stage 4 ===== -->
+          <rect x="645" y="8" width="92" height="26" rx="13" fill="#faf0e2"/>
+          <text class="pill" x="691" y="25" text-anchor="middle" fill="#b45309">DECIDE</text>
+          <rect x="603" y="48" width="176" height="100" rx="11" fill="#faf0e2" stroke="#b45309" stroke-width="1.5"/>
+          <text class="bt" x="691" y="82" text-anchor="middle">Match</text>
+          <text class="bs" x="691" y="105" text-anchor="middle">this payment against</text>
+          <text class="bs" x="691" y="123" text-anchor="middle">these policy lines</text>
+          <line class="edge" x1="781" y1="98" x2="802" y2="98" marker-end="url(#a2)"/>
+
+          <!-- ===== stage 5 ===== -->
+          <rect x="846" y="8" width="92" height="26" rx="13" fill="#2b1a55"/>
+          <text class="pill" x="892" y="25" text-anchor="middle" fill="#ffffff">THE GATE</text>
+          <rect x="804" y="48" width="176" height="100" rx="11" fill="#ffffff" stroke="#2b1a55" stroke-width="2"/>
+          <text class="bt" x="892" y="82" text-anchor="middle">Allocate or hold</text>
+          <text class="bs" x="892" y="105" text-anchor="middle">inside threshold → money;</text>
+          <text class="bs" x="892" y="123" text-anchor="middle">outside → Attention queue</text>
+          <line class="edge" x1="982" y1="98" x2="1003" y2="98" marker-end="url(#a2)"/>
+
+          <!-- ===== stage 6 ===== -->
+          <rect x="1047" y="8" width="92" height="26" rx="13" fill="#F3EEFB"/>
+          <text class="pill" x="1093" y="25" text-anchor="middle" fill="#6B46C1">WRITE</text>
+          <rect x="1005" y="48" width="175" height="100" rx="11" fill="#F3EEFB" stroke="#6B46C1" stroke-width="1.5"/>
+          <text class="bt" x="1093" y="82" text-anchor="middle">Chase &amp; resolve</text>
+          <text class="bs" x="1093" y="105" text-anchor="middle">statement, query,</text>
+          <text class="bs" x="1093" y="123" text-anchor="middle">closing draft</text>
+
+          <!-- ===== what holds each stage ===== -->
+          <rect x="0"    y="176" width="176" height="104" rx="10" fill="none" stroke="#d8dbe4" stroke-width="1.5" stroke-dasharray="4 4"/>
+          <text class="gl" x="14" y="198">HELD BY</text>
+          <text class="gd" x="14" y="222">Deterministic</text>
+          <text class="gd" x="14" y="241">routing. Nothing</text>
+          <text class="gd" x="14" y="260">to get wrong yet.</text>
+
+          <rect x="201"  y="176" width="176" height="104" rx="10" fill="none" stroke="#a9d5d0" stroke-width="1.5" stroke-dasharray="4 4"/>
+          <text class="gl" x="215" y="198">HELD BY</text>
+          <text class="gd" x="215" y="222">Every failure path</text>
+          <text class="gd" x="215" y="241">defaults to the one</text>
+          <text class="gd" x="215" y="260">that escalates.</text>
+
+          <rect x="402"  y="176" width="176" height="104" rx="10" fill="none" stroke="#a9d5d0" stroke-width="1.5" stroke-dasharray="4 4"/>
+          <text class="gl" x="416" y="198">HELD BY</text>
+          <text class="gd" x="416" y="222">The figures must</text>
+          <text class="gd" x="416" y="241">reconcile to the</text>
+          <text class="gd" x="416" y="260">document's own total.</text>
+
+          <rect x="603"  y="176" width="176" height="104" rx="10" fill="none" stroke="#e5c896" stroke-width="1.5" stroke-dasharray="4 4"/>
+          <text class="gl" x="617" y="198">HELD BY</text>
+          <text class="gd" x="617" y="222">Sign alignment.</text>
+          <text class="gd" x="617" y="241">Totals recomputed</text>
+          <text class="gd" x="617" y="260">from invoice rows.</text>
+
+          <rect x="804"  y="176" width="176" height="104" rx="10" fill="none" stroke="#2b1a55" stroke-width="1.5" stroke-dasharray="4 4"/>
+          <text class="gl" x="818" y="198">HELD BY</text>
+          <text class="gd" x="818" y="222">A configured</text>
+          <text class="gd" x="818" y="241">threshold — the only</text>
+          <text class="gd" x="818" y="260">dial that matters.</text>
+
+          <rect x="1005" y="176" width="175" height="104" rx="10" fill="none" stroke="#cdb9ee" stroke-width="1.5" stroke-dasharray="4 4"/>
+          <text class="gl" x="1019" y="198">HELD BY</text>
+          <text class="gd" x="1019" y="222">A named person</text>
+          <text class="gd" x="1019" y="241">who edits it and</text>
+          <text class="gd" x="1019" y="260">clicks Send.</text>
+
+          <!-- bottom bar -->
+          <rect x="0" y="308" width="1180" height="54" rx="10" fill="#2b1a55"/>
+          <text x="590" y="341" text-anchor="middle" font-size="16.5" font-weight="700" fill="#ffffff">The ledger sits downstream of all of it — and the posting code contains zero model call sites.</text>
+        </g>
+      </svg>

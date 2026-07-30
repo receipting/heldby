@@ -19,6 +19,8 @@ from pathlib import Path
 
 from . import __version__, catalog as catalog_mod
 from .catalog import Catalog, CatalogError
+from . import adopt as adopt_mod
+from . import lint as lint_mod
 from .render import Process, Register, render_json, render_markdown
 from .scan import ScanReport
 from .scan import scan as scan_repo
@@ -443,6 +445,123 @@ def cmd_register(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+
+def _repo_config(root: Path) -> dict:
+    """Read the target repo's heldby.yml, if it has one."""
+    import yaml
+
+    path = root / "heldby.yml"
+    if not path.is_file():
+        return {}
+    return yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+
+
+def cmd_lint(args: argparse.Namespace) -> int:
+    root = Path(args.path).resolve()
+    if not root.is_dir():
+        print(f"heldby: {root} is not a directory", file=sys.stderr)
+        return EXIT_UNREADABLE
+    try:
+        cat = catalog_mod.load()
+    except CatalogError as exc:
+        print(f"heldby: catalogue will not load — {exc}", file=sys.stderr)
+        return EXIT_UNREADABLE
+
+    cfg = _repo_config(root)
+    gateways = args.gateway or cfg.get("gateway_modules") or []
+    if not gateways:
+        print(
+            "heldby lint: no gateway module configured, so there is nothing to enforce.\n"
+            "Add gateway_modules to heldby.yml (or run `heldby adopt` to seed one), or pass\n"
+            "--gateway. Refusing to pass a gate that checks nothing.",
+            file=sys.stderr,
+        )
+        return EXIT_UNREADABLE
+
+    baseline = root / (cfg.get("baseline") or ".heldby-baseline.json")
+    result = lint_mod.lint(
+        root,
+        cat,
+        gateway_modules=list(gateways),
+        exclude=list(cfg.get("exclude") or []),
+        baseline_path=baseline,
+        include_tests=args.include_tests,
+    )
+
+    if args.update_baseline:
+        all_found = result.violations + result.accepted
+        lint_mod.write_baseline(baseline, all_found)
+        print(
+            f"heldby lint: baselined {len(all_found)} pre-existing bypass(es) into "
+            f"{baseline.name}.\nThis list may only shrink from here."
+        )
+        return EXIT_OK
+
+    if args.json:
+        print(json.dumps(result.as_dict(), indent=2))
+    else:
+        print(lint_mod.render_lint(result))
+    return EXIT_OK if result.ok else EXIT_FINDING
+
+
+def cmd_adopt(args: argparse.Namespace) -> int:
+    root = Path(args.path).resolve()
+    if not root.is_dir():
+        print(f"heldby: {root} is not a directory", file=sys.stderr)
+        return EXIT_UNREADABLE
+    try:
+        cat = catalog_mod.load()
+    except CatalogError as exc:
+        print(f"heldby: catalogue will not load — {exc}", file=sys.stderr)
+        return EXIT_UNREADABLE
+
+    plan = adopt_mod.plan(root, cat)
+
+    if plan.blocked and not args.force:
+        for path in plan.existing:
+            print(f"heldby adopt: {path.name} already exists", file=sys.stderr)
+        print(
+            "\nRefusing to overwrite a declaration someone has already filled in — the prose "
+            "in it\nis the part that took the work. Pass --force if you mean to replace it.",
+            file=sys.stderr,
+        )
+        return EXIT_UNREADABLE
+
+    declaration = adopt_mod.render_declaration(plan)
+    config = adopt_mod.render_config(plan)
+
+    if args.dry_run:
+        print(f"--- {plan.declaration_path.name} ---\n{declaration}")
+        print(f"--- {plan.config_path.name} ---\n{config}")
+        return EXIT_OK
+
+    plan.declaration_path.write_text(declaration, encoding="utf-8")
+    plan.config_path.write_text(config, encoding="utf-8")
+
+    result = lint_mod.lint(
+        root, cat, gateway_modules=plan.gateway_modules, baseline_path=None
+    )
+    lint_mod.write_baseline(plan.baseline_path, result.violations)
+
+    print(f"heldby adopt: wrote {plan.declaration_path.name}, {plan.config_path.name} "
+          f"and {plan.baseline_path.name}")
+    print(f"  {len(plan.processes)} process(es) stubbed: {', '.join(plan.processes) or '(none found)'}")
+    print(f"  {len(plan.gateway_modules)} gateway module(s) seeded from where calls are made today")
+    print(f"  {len(result.violations)} pre-existing bypass(es) baselined, so the gate is green now")
+    print(
+        "\nNext, and none of it is optional:\n"
+        "  1. Fill in `does` and `heldBy` for each process. `heldBy` is the whole point —\n"
+        "     name the specific control, and leave it EMPTY if there genuinely isn't one.\n"
+        "     The register will print `nothing`, which is the most useful row it can carry.\n"
+        "  2. Check every `class`. They are all stubbed as `read`, which is wrong for any\n"
+        "     process that can reach a protected action.\n"
+        "  3. Route each model call through the gateway module, passing the typed feature,\n"
+        "     then delete its entry from the baseline.\n"
+        "  4. Add `heldby lint` to CI."
+    )
+    return EXIT_OK
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="heldby",
@@ -510,6 +629,22 @@ def main(argv: list[str] | None = None) -> int:
         help="exit 1 if any process has nothing holding it",
     )
     reg.set_defaults(func=cmd_register)
+
+    ln = sub.add_parser("lint", help="fail the build on a model call outside the gateway module")
+    ln.add_argument("path", nargs="?", default=".", help="repo to check (default: .)")
+    ln.add_argument("--gateway", action="append", metavar="PATH",
+                    help="a module permitted to construct a client (repeatable)")
+    ln.add_argument("--update-baseline", action="store_true",
+                    help="accept every current bypass; the list may only shrink after this")
+    ln.add_argument("--include-tests", action="store_true", help="also check test files")
+    ln.add_argument("--json", action="store_true", help="machine-readable output")
+    ln.set_defaults(func=cmd_lint)
+
+    ad = sub.add_parser("adopt", help="write declarations and a gate into the repo")
+    ad.add_argument("path", nargs="?", default=".", help="repo to adopt (default: .)")
+    ad.add_argument("--dry-run", action="store_true", help="print what would be written")
+    ad.add_argument("--force", action="store_true", help="overwrite an existing declaration")
+    ad.set_defaults(func=cmd_adopt)
 
     args = parser.parse_args(argv)
     return args.func(args)

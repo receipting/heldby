@@ -1,0 +1,10 @@
+{
+  "name": "heldby",
+  "description": "Find every place AI runs in a codebase, classify each use as Read/Decide/Converse/Write, and name what stands between each model's output and a real-world effect. Produces an AI register for an auditor, a vendor questionnaire, or a trust-centre page.",
+  "version": "0.1.0",
+  "author": { "name": "Managed Functions Pty Ltd", "url": "https://receipting.ai" },
+  "homepage": "https://github.com/receipting/heldby",
+  "repository": "https://github.com/receipting/heldby",
+  "license": "MIT",
+  "keywords": ["ai", "governance", "audit", "llm", "compliance", "soc2", "ai-register", "risk"]
+}

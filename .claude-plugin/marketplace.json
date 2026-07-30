@@ -1,0 +1,12 @@
+{
+  "name": "heldby",
+  "description": "AI governance tooling: inventory where AI runs in your codebase and name the control between each model's output and a real-world effect.",
+  "owner": { "name": "Managed Functions Pty Ltd", "url": "https://receipting.ai" },
+  "plugins": [
+    {
+      "name": "heldby",
+      "source": "./",
+      "description": "Audit a codebase for every place AI runs and name what holds each one. Produces an AI register."
+    }
+  ]
+}

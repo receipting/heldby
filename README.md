@@ -8,8 +8,22 @@ questionnaire, or publish as a trust-centre page.
 The four-class framework below was developed at [receipting.ai](https://receipting.ai) to
 govern its own estate. The tool is MIT-licensed; so is the framework. Use both.
 
-> **Status: in development.** The catalogue and its freshness checks work. The scan,
-> classify and adopt phases are being built in the open — see [docs/PLAN.md](docs/PLAN.md).
+## Install
+
+As a Claude Code plugin — this is the way you want it, because classification needs a
+model reading your code:
+
+```
+/plugin marketplace add receipting/heldby
+/plugin install heldby@heldby
+```
+
+Or use the deterministic half on its own, with no install:
+
+```bash
+uvx heldby scan .          # find every place a model might run
+uvx heldby catalog         # print the entire detection surface
+```
 
 ---
 
@@ -25,6 +39,10 @@ wrong, at a rate nobody can drive to zero.
 
 Almost nobody can answer that about their own codebase, because almost nobody has an
 inventory. `heldby` builds the inventory and classifies it.
+
+<p align="center">
+  <img src="diagrams/four-classes.svg" alt="Four classes of AI use: Read, Decide, Converse, Write — each with what stands between the model output and the real world" width="100%">
+</p>
 
 ## The four classes
 
@@ -99,6 +117,47 @@ Said out loud, because tools in this space routinely imply otherwise:
 Every finding carries a confidence — confirmed, inferred or unknown — and the report states
 in plain words what the analysis could not see. If a sweep skips a language or caps at N
 files, it says so: silent caps read as "covered everything".
+
+## The commands
+
+The split is the architecture. Discovery, linting and emission are **deterministic** and
+gate a build with an exit code. Classification — what class a site is, and what actually
+holds it — needs a model reading the surrounding code, so it lives in the skill and its
+result is committed as a reviewed artefact. CI checks the artefact is current; it never
+re-infers it.
+
+| Command | What it does | Model? |
+|---|---|---|
+| `heldby scan <repo>` | Every candidate model call site, every protected action near it, and what it could not see | no |
+| *(the skill)* | Reads the code around each site and assigns class, reach and `held_by` | **yes** |
+| `heldby register` | Renders the register a customer or auditor reads, plus a completeness check | no |
+| `heldby lint <repo>` | Fails the build on a model call outside the designated gateway module | no |
+| `heldby adopt <repo>` | Writes declarations and the gate into the repo, so the next run is declared not guessed | no |
+| `heldby catalog` | Prints the detection surface; `--check-registries` resolves every package name | no |
+
+### Discovery is tuned for recall, not precision
+
+It emits candidates marked `confirmed` or `inferred` and expects the classify pass to
+clear the false positives. An over-flagged site costs a reviewer a minute; a
+wrongly-cleared site hides exactly the risk this exists to find, behind a clean report.
+
+Two failure modes it will hit on real code, and reports rather than hides:
+
+- **The factory.** Provider SDKs confined to a few client-construction files while the
+  actual AI features live in modules importing no SDK at all. Both are reported and
+  neither is linked — so trust the self-labelled process names over the call sites.
+- **The provider registry.** A dozen vendors behind one `openai` import, separated only
+  by `base_url` values in a config table. The base URL is the only tell, and the model
+  id is usually a runtime value — so "which model" is often legitimately unanswerable.
+
+### Graduating off inference
+
+`heldby adopt` writes the findings back as declarations plus a lint gate, so a new AI
+call cannot ship without declaring what it is — it will not compile. It **ratchets**:
+one gateway module is designated and every existing bypass is baselined, so the gate is
+green on day one and can only tighten. And it generates the *typed wrapper*, not just
+the declaration, because the load-bearing part is the `feature: AIFeature` parameter
+rather than the list.
 
 ## The catalogue
 

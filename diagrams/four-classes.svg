@@ -1,0 +1,75 @@
+<svg viewBox="0 0 1180 400" xmlns="http://www.w3.org/2000/svg" role="img"
+           aria-label="Four classes of AI use: Read, Decide, Converse, Write — each with what stands between the model output and the real world"><rect width="1180" height="400" fill="#ffffff"/>
+        <defs>
+          <marker id="a1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="#a7adbf"/>
+          </marker>
+          <style>
+            .f1 text{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif}
+            .f1 .hd{font-size:13px;font-weight:800;letter-spacing:.08em;fill:#6b6b80}
+            .f1 .cn{font-size:22px;font-weight:800}
+            .f1 .cd{font-size:13px;fill:#5a5a70}
+            .f1 .gt{font-size:14.5px;fill:#2c2c3d}
+            .f1 .rh{font-size:16px;font-weight:800}
+            .f1 .edge{stroke:#a7adbf;stroke-width:2;fill:none}
+          </style>
+        </defs>
+        <g class="f1">
+          <!-- column headers -->
+          <text class="hd" x="141"  y="22" text-anchor="middle">THE MODEL PRODUCES</text>
+          <text class="hd" x="584"  y="22" text-anchor="middle">WHAT STANDS BETWEEN IT AND THE WORLD</text>
+          <text class="hd" x="1033" y="22" text-anchor="middle">WHAT IT CAN REACH</text>
+
+          <!-- ============ ROW 1 · READ ============ -->
+          <rect x="16" y="42" width="250" height="72" rx="10" fill="#e0f2f1" stroke="#0f766e" stroke-width="1.5"/>
+          <text class="cn" x="36" y="74" fill="#0f766e">Read</text>
+          <text class="cd" x="36" y="95">structured data from a document</text>
+          <line class="edge" x1="268" y1="78" x2="300" y2="78" marker-end="url(#a1)"/>
+          <rect x="304" y="42" width="560" height="72" rx="10" fill="#ffffff" stroke="#a9d5d0" stroke-width="1.5"/>
+          <text class="gt" x="324" y="72">The real world. A column that must exist. An account already on file.</text>
+          <text class="gt" x="324" y="94">A total that must reconcile. No person needed — facts do the checking.</text>
+          <line class="edge" x1="866" y1="78" x2="898" y2="78" marker-end="url(#a1)"/>
+          <rect x="902" y="42" width="262" height="72" rx="10" fill="#f7faf9" stroke="#a9d5d0" stroke-width="1.5"/>
+          <text class="rh" x="1033" y="74" text-anchor="middle" fill="#0f766e">Nothing, by itself</text>
+          <text class="cd" x="1033" y="95" text-anchor="middle">a bad read stalls work, it can't spend</text>
+
+          <!-- ============ ROW 2 · DECIDE ============ -->
+          <rect x="16" y="130" width="250" height="72" rx="10" fill="#faf0e2" stroke="#b45309" stroke-width="1.5"/>
+          <text class="cn" x="36" y="162" fill="#b45309">Decide</text>
+          <text class="cd" x="36" y="183">an action with a financial effect</text>
+          <line class="edge" x1="268" y1="166" x2="300" y2="166" marker-end="url(#a1)"/>
+          <rect x="304" y="130" width="560" height="72" rx="10" fill="#ffffff" stroke="#e5c896" stroke-width="1.5"/>
+          <text class="gt" x="324" y="160">Deterministic code and a configured threshold — no person on the fast</text>
+          <text class="gt" x="324" y="182">path, by design. Everything outside the threshold goes to a person.</text>
+          <line class="edge" x1="866" y1="166" x2="898" y2="166" marker-end="url(#a1)"/>
+          <rect x="902" y="130" width="262" height="72" rx="10" fill="#fffbf5" stroke="#e5c896" stroke-width="1.5"/>
+          <text class="rh" x="1033" y="162" text-anchor="middle" fill="#b45309">Money</text>
+          <text class="cd" x="1033" y="183" text-anchor="middle">this is the class that needs the work</text>
+
+          <!-- ============ ROW 3 · CONVERSE ============ -->
+          <rect x="16" y="218" width="250" height="72" rx="10" fill="#e6edfd" stroke="#1d4ed8" stroke-width="1.5"/>
+          <text class="cn" x="36" y="250" fill="#1d4ed8">Converse</text>
+          <text class="cd" x="36" y="271">an answer for the person who asked</text>
+          <line class="edge" x1="268" y1="254" x2="300" y2="254" marker-end="url(#a1)"/>
+          <rect x="304" y="218" width="560" height="72" rx="10" fill="#ffffff" stroke="#bacdf6" stroke-width="1.5"/>
+          <text class="gt" x="324" y="248">The asker. No separate review — reading the answer <tspan font-style="italic">is</tspan> the review.</text>
+          <text class="gt" x="324" y="270">The person who asked is the person who judges it, as it arrives.</text>
+          <line class="edge" x1="866" y1="254" x2="898" y2="254" marker-end="url(#a1)"/>
+          <rect x="902" y="218" width="262" height="72" rx="10" fill="#f8faff" stroke="#bacdf6" stroke-width="1.5"/>
+          <text class="rh" x="1033" y="250" text-anchor="middle" fill="#1d4ed8">Nobody else</text>
+          <text class="cd" x="1033" y="271" text-anchor="middle">a closed loop, and narrowly defined</text>
+
+          <!-- ============ ROW 4 · WRITE ============ -->
+          <rect x="16" y="306" width="250" height="72" rx="10" fill="#F3EEFB" stroke="#6B46C1" stroke-width="1.5"/>
+          <text class="cn" x="36" y="338" fill="#6B46C1">Write</text>
+          <text class="cd" x="36" y="359">prose the system carries onward</text>
+          <line class="edge" x1="268" y1="342" x2="300" y2="342" marker-end="url(#a1)"/>
+          <rect x="304" y="306" width="560" height="72" rx="10" fill="#ffffff" stroke="#cdb9ee" stroke-width="1.5"/>
+          <text class="gt" x="324" y="336">A named person, who edits it and releases it. Every time, on the record.</text>
+          <text class="gt" x="324" y="358">Nothing written by a model leaves this building unattended.</text>
+          <line class="edge" x1="866" y1="342" x2="898" y2="342" marker-end="url(#a1)"/>
+          <rect x="902" y="306" width="262" height="72" rx="10" fill="#fcfaff" stroke="#cdb9ee" stroke-width="1.5"/>
+          <text class="rh" x="1033" y="338" text-anchor="middle" fill="#6B46C1">A third party</text>
+          <text class="cd" x="1033" y="359" text-anchor="middle">your reputation, in someone's inbox</text>
+        </g>
+      </svg>

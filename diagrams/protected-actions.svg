@@ -1,0 +1,69 @@
+<svg viewBox="0 0 1180 304" xmlns="http://www.w3.org/2000/svg" role="img"
+           aria-label="Four protected actions — money, send, recipient, ledger — and what holds each one"><rect width="1180" height="304" fill="#ffffff"/>
+        <defs>
+          <style>
+            .f3 text{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif}
+            .f3 .an{font-size:26px;font-weight:800;fill:#1d1d2b}
+            .f3 .hl{font-size:11.5px;font-weight:800;letter-spacing:.10em;fill:#8b8ba0}
+            .f3 .hv{font-size:17px;font-weight:800;fill:#4C2E94}
+            .f3 .dt{font-size:14px;fill:#3a3a4d}
+          </style>
+        </defs>
+        <g class="f3">
+          <!-- 1 · Money -->
+          <rect x="0" y="0" width="272" height="300" rx="12" fill="#ffffff" stroke="#e4e1ee" stroke-width="1.5"/>
+          <rect x="0" y="0" width="272" height="6" rx="3" fill="#b45309"/>
+          <text class="an" x="20" y="52">Money</text>
+          <line x1="20" y1="70" x2="252" y2="70" stroke="#e4e1ee" stroke-width="1.5"/>
+          <text class="hl" x="20" y="96">HELD BY</text>
+          <text class="hv" x="20" y="121">Deterministic code</text>
+          <text class="dt" x="20" y="154">Sign alignment blocks a debit</text>
+          <text class="dt" x="20" y="176">matching a credit. Totals are</text>
+          <text class="dt" x="20" y="198">recomputed from the invoice</text>
+          <text class="dt" x="20" y="220">rows, never read from the</text>
+          <text class="dt" x="20" y="242">model. Sub-cent gaps only,</text>
+          <text class="dt" x="20" y="264">for clearing residue.</text>
+
+          <!-- 2 · Send -->
+          <rect x="302" y="0" width="272" height="300" rx="12" fill="#ffffff" stroke="#e4e1ee" stroke-width="1.5"/>
+          <rect x="302" y="0" width="272" height="6" rx="3" fill="#6B46C1"/>
+          <text class="an" x="322" y="52">Send</text>
+          <line x1="322" y1="70" x2="554" y2="70" stroke="#e4e1ee" stroke-width="1.5"/>
+          <text class="hl" x="322" y="96">HELD BY</text>
+          <text class="hv" x="322" y="121">A human click</text>
+          <text class="dt" x="322" y="154">The daily chase run sends</text>
+          <text class="dt" x="322" y="176">templates only — never model</text>
+          <text class="dt" x="322" y="198">prose. The row naming who</text>
+          <text class="dt" x="322" y="220">sent it is written before the</text>
+          <text class="dt" x="322" y="242">send, so nothing can leave</text>
+          <text class="dt" x="322" y="264">unevidenced.</text>
+
+          <!-- 3 · Recipient -->
+          <rect x="604" y="0" width="272" height="300" rx="12" fill="#ffffff" stroke="#e4e1ee" stroke-width="1.5"/>
+          <rect x="604" y="0" width="272" height="6" rx="3" fill="#1d4ed8"/>
+          <text class="an" x="624" y="52">Recipient</text>
+          <line x1="624" y1="70" x2="856" y2="70" stroke="#e4e1ee" stroke-width="1.5"/>
+          <text class="hl" x="624" y="96">HELD BY</text>
+          <text class="hv" x="624" y="121">A projection, not a choice</text>
+          <text class="dt" x="624" y="154">The address is derived from</text>
+          <text class="dt" x="624" y="176">the scenario by code. Written</text>
+          <text class="dt" x="624" y="198">that way deliberately, so a</text>
+          <text class="dt" x="624" y="220">hostile name planted inside a</text>
+          <text class="dt" x="624" y="242">document cannot redirect an</text>
+          <text class="dt" x="624" y="264">email to whoever put it there.</text>
+
+          <!-- 4 · Ledger -->
+          <rect x="906" y="0" width="272" height="300" rx="12" fill="#ffffff" stroke="#e4e1ee" stroke-width="1.5"/>
+          <rect x="906" y="0" width="272" height="6" rx="3" fill="#0f766e"/>
+          <text class="an" x="926" y="52">Ledger</text>
+          <line x1="926" y1="70" x2="1158" y2="70" stroke="#e4e1ee" stroke-width="1.5"/>
+          <text class="hl" x="926" y="96">HELD BY</text>
+          <text class="hv" x="926" y="121">Absence</text>
+          <text class="dt" x="926" y="154">The code that posts to your</text>
+          <text class="dt" x="926" y="176">accounting system contains</text>
+          <text class="dt" x="926" y="198">zero model call sites. The one</text>
+          <text class="dt" x="926" y="220">capability in the estate that</text>
+          <text class="dt" x="926" y="242">can alter records is nowhere</text>
+          <text class="dt" x="926" y="264">near a model.</text>
+        </g>
+      </svg>
