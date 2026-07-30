@@ -80,6 +80,18 @@ The renderer will not invent a control and will not soften a missing one: an emp
 `held_by` prints as **nothing**, in bold. That is correct — leave it empty when
 nothing holds it.
 
+Two fields in that file are easy to miss and carry a lot of the value:
+
+- **`protected_actions`** — one entry per action worth protecting, saying what holds
+  it *system-wide*. This is where **capability** goes, as distinct from reach.
+  "There is no broker SDK anywhere in this repository, so the system cannot place a
+  trade" is often the single most useful line in the whole register, and it belongs
+  here rather than in a row. Record actions the model **cannot** reach too, and say
+  so — a register that lists only model risks is not a register of the system.
+- **`excluded`** — every candidate you cleared, *with the reason*. Do not silently
+  drop a false positive: a reader who runs the sweep themselves will see the same
+  label and needs to know it was considered and why it was dismissed.
+
 Add `--layout sections` for anything destined for print or PDF; the six-column
 table is for a screen.
 

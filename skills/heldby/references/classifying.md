@@ -25,6 +25,58 @@ classified the only money-moving process as low risk. File it under output and y
 have committed to a human reviewing every allocation, which is the entire job the
 software exists to remove.
 
+## The case the four classes do not obviously cover
+
+You will hit this on the first agent pipeline you audit, so decide it deliberately rather
+than reaching for whichever class feels closest.
+
+**An intermediate model output that is neither checkable nor an action.** An agent reads
+some data and emits an opinion — a signal, a score, a summary, a recommendation — which is
+consumed by another agent or another process rather than by a person.
+
+It is not **Read**: the rule says the output must be checkable against something real, and
+a judgement has no referent to reconcile against. It is not **Decide**: it proposes no
+action. It is not **Converse**: nobody asked. It is not **Write**: no prose is carried to a
+third party.
+
+**The rule: an intermediate output inherits the class of what it feeds**, unless it is
+independently checkable, in which case it is Read on its own merits.
+
+That follows from the framework rather than being bolted on. The classes are defined by the
+gate and by what the output can reach, and an opinion feeding a decision reaches whatever
+that decision reaches. Grading it separately would let any pipeline classify itself down to
+nothing by chopping a Decide into six Reads that "only return data" — which is the same
+dodge the closed-loop test exists to close, wearing a different hat.
+
+So thirteen agents whose signals feed a buy/sell recommendation are **Decide**, and the
+`held_by` for them is whatever bounds the signal — usually a typed enum, and usually
+nothing else.
+
+## Grouping — one row for many call sites
+
+The register's unit is the **process**, and several call sites are one process when they
+share a class, a model and a control. Thirteen agents that differ only in their prompt are
+one row; rendering thirteen near-identical rows is noise that buries the rows that matter.
+
+When you group, two things are required:
+
+- **Name the row with a name the code uses, or list what it covers.** The completeness
+  check resolves the code's own labels against your register. A row named descriptively
+  while the code calls itself something else reports as a process that could not be located
+  — a naming mismatch masquerading as a gap.
+- **Set `covers`** to every label the row stands for, and name the members in `does`.
+
+```yaml
+- name: investor-analysts
+  class: decide
+  covers: [warren_buffett, ben_graham, cathie_wood]   # every label this row absorbs
+  does: Thirteen agents that differ only in their prompt, each emitting a signal.
+```
+
+Do **not** group across different controls. If twelve agents share a control and the
+thirteenth does not, that thirteenth is its own row — the whole point of the column is that
+it is specific.
+
 ## The closed-loop test — Converse only
 
 Converse is the class people abuse, because "it's just a chatbot, the user reads
@@ -154,7 +206,11 @@ Write one entry per process — not per call site:
 processes:
   - name: matching                 # what the code calls it, from `labels`
     class: decide
-    model: claude-sonnet-4-6       # or "selected at runtime" if it genuinely is
+    model: claude-sonnet-4-6       # a literal at the site, or…
+    # model: selected at runtime   # …this, when a registry or config picks it.
+    # Never guess an id to fill the column. Most real code selects at runtime, and
+    # a fabricated model id discredits every honest row next to it.
+    covers: []                     # other labels this row stands for, if grouped
     component: simplet
     does: Matches an incoming payment to the invoices it pays.
     reaches: [move-money]

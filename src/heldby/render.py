@@ -51,6 +51,11 @@ class Process:
     held_by: str
     reaches: list[str] = field(default_factory=list)
     source: str = "declared"
+    #: Other names the code uses for this process. A register row is often
+    #: legitimately one row for many call sites — thirteen agents that differ only
+    #: in their prompt are one process, not thirteen — and the completeness check
+    #: has to resolve those labels to this row or it reports them as undeclared.
+    covers: list[str] = field(default_factory=list)
 
     @property
     def has_control(self) -> bool:
@@ -89,6 +94,7 @@ def _completeness(register: Register, scans: dict[str, ScanReport]) -> tuple[lis
     such rather than quietly dropped.
     """
     declared = {p.name for p in register.processes}
+    declared |= {name for p in register.processes for name in p.covers}
     excluded = {e.get("name", "") for e in register.excluded}
     found: set[str] = set()
     for report in scans.values():
@@ -96,7 +102,13 @@ def _completeness(register: Register, scans: dict[str, ScanReport]) -> tuple[lis
             found.update(names)
 
     undeclared = sorted(n for n in found - declared - excluded)
-    unfound = sorted(declared - found)
+    # Only rows the code never names anywhere count as unfound. A row that
+    # declares `covers` has already been resolved above.
+    unfound = sorted(
+        p.name
+        for p in register.processes
+        if p.name not in found and not (set(p.covers) & found)
+    )
     return undeclared, unfound
 
 
@@ -332,8 +344,11 @@ def render_markdown(
     if unfound:
         out.append(
             f"{len(unfound)} declared process(es) could not be located by the sweep "
-            f"({', '.join(f'`{n}`' for n in unfound)}). That is a limit of the sweep, not "
-            "evidence the process does not exist — the declaration is the stronger source."
+            f"({', '.join(f'`{n}`' for n in unfound)}). **Check the names first**: the most "
+            "common cause is a register row named descriptively while the code labels itself "
+            "something else, which is a naming mismatch rather than a missing process — set "
+            "`covers` on the row to the labels the code actually uses. Where the names do "
+            "agree, this is a limit of the sweep and the declaration is the stronger source."
         )
         out.append("")
 
@@ -377,6 +392,7 @@ def render_json(register: Register, scans: dict[str, ScanReport]) -> dict:
                 "component": p.repo,
                 "does": p.does,
                 "reaches": p.reaches,
+                "covers": p.covers,
                 "held_by": p.held_by,
                 "has_control": p.has_control,
                 "source": p.source,

@@ -141,3 +141,37 @@ def test_provenance_pins_the_detection_surface(scans):
     markdown = render_markdown(_register([GOOD]), scans)
     assert "Detection surface:" in markdown
     assert render_json(_register([GOOD]), scans)["provenance"]
+
+
+def test_a_grouped_row_resolves_the_labels_it_covers(scans):
+    """Thirteen agents differing only in their prompt are one process, not thirteen.
+
+    Grouping them is right, but the completeness check then reports every label
+    the row does not literally match as undeclared — which happened on the first
+    real cold run and made a clean register look like it had gaps.
+    """
+    found = {n for r in scans.values() for names in r.labels.values() for n in names}
+    assert len(found) >= 2, "fixture must label more than one process"
+    grouped = Process(
+        name="the-agents",
+        ai_class="decide",
+        model="selected at runtime",
+        repo="x",
+        does="Several agents that differ only in their prompt.",
+        held_by="A typed enum on the output.",
+        covers=sorted(found),
+    )
+    payload = render_json(_register([grouped]), scans)
+    assert payload["completeness"]["undeclared_processes"] == []
+    assert payload["completeness"]["declared_but_not_located"] == []
+
+
+def test_an_unlocated_row_blames_naming_first(scans):
+    """The usual cause is a descriptive row name, not a missing process."""
+    ghost = Process(
+        name="nothing-in-the-code-is-called-this",
+        ai_class="read", model="m", repo="x", does="d", held_by="h",
+    )
+    markdown = render_markdown(_register([ghost]), scans)
+    assert "Check the names first" in markdown
+    assert "`covers`" in markdown

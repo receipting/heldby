@@ -58,6 +58,28 @@ not choose is **not**.
 
 Fail any one and it is **Write**.
 
+## Clear the false positives the sweep is known to produce
+
+The sweep is tuned for recall, so some of what it hands you is not a process at all. These
+four recur, and every one of them appeared on the first cold run against a real repository.
+Exclude them **with a reason** rather than deleting them — a reader who runs the sweep
+themselves will see the same labels and needs to know they were considered.
+
+- **Graph entry and utility nodes.** Node registration is normally the best available list
+  of an agent app's real processes, which is exactly why a `start_node` that only seeds
+  state comes with it.
+- **Dictionary keys and field names.** The sweep reads self-labelling metadata and cannot
+  tell a process name from an output key without the surrounding code. You can.
+- **UI labels.** A tab or component named after a feature is not that feature.
+- **Things named "agent" that call no model.** The worst of the four, because the name and
+  the directory both argue for inclusion. One real repository had six of twenty-one files in
+  `src/agents/` making no model call at all — including one called
+  `risk_management_agent`, which was pure arithmetic. Check for an actual call before
+  writing a row; a name-based inventory overstates by a third.
+
+Overstating is not the safe direction here. A register padded with non-AI rows invites the
+reader to discount the ones that matter.
+
 ## Also refute these
 
 **The class is too kind.** For each process, ask what the worst plausible wrong
