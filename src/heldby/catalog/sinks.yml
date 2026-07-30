@@ -83,7 +83,7 @@ rules:
     remedies: [literal-argv, constant-payload]
     imports: { ts: ["e2b", "@e2b/code-interpreter"], py: ["e2b", "e2b_code_interpreter"] }
     registry: { npm: ["e2b", "@e2b/code-interpreter"], pypi: ["e2b", "e2b-code-interpreter"] }
-    match: { member: ["runCode", "run_code", "commands", "run"] }
+    match: { member: ["runCode", "commands.run"] }
     note: >
       A sandbox is not credited as a gate — it is a different action with a
       smaller blast radius. Say which one the register means.
@@ -102,7 +102,7 @@ rules:
     severity: high
     imports: { ts: ["@daytona/sdk", "@daytonaio/sdk"], py: ["daytona"] }
     registry: { npm: ["@daytona/sdk", "@daytonaio/sdk"], pypi: ["daytona"] }
-    match: { member: ["codeRun", "code_run"] }
+    match: { member: ["codeRun"] }
     note: >
       @daytonaio/sdk was renamed to @daytona/sdk. Both stay listed: the old name
       keeps matching because repos still on it exist, which is the point of a
@@ -140,7 +140,7 @@ rules:
     severity: critical
     imports: { ts: ["plaid"], py: ["plaid"] }
     registry: { npm: ["plaid"], pypi: ["plaid-python"] }
-    match: { member: ["transferCreate", "transfer_create"] }
+    match: { member: ["transferCreate"] }
 
   - id: money.brokers
     action: move-money
@@ -185,7 +185,7 @@ rules:
             "@aws-sdk/client-ses", "@aws-sdk/client-sesv2"]
       pypi: ["sendgrid", "resend", "postmarker", "boto3"]
     match:
-      member: ["sendMail", "send_message", "sendEmail", "send_email", "emails", "send", "sendMultiple"]
+      member: ["sendMail", "sendEmail", "emails.send", "send_message", "sendMultiple"]
       symbol: ["SendEmailCommand", "SendRawEmailCommand", "SMTP", "SMTP_SSL"]
 
   - id: comms.chat.sdk
@@ -199,7 +199,7 @@ rules:
     registry:
       npm: ["twilio", "@slack/web-api", "discord.js", "node-telegram-bot-api"]
       pypi: ["twilio", "slack-sdk", "discord.py", "python-telegram-bot"]
-    match: { member: ["messages", "create", "postMessage", "chat_postMessage", "sendMessage", "send_message"] }
+    match: { member: ["messages.create", "chat.postMessage", "chat_postMessage", "sendMessage"] }
 
   - id: comms.http
     action: external-comms

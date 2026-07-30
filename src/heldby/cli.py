@@ -14,10 +14,13 @@ import json
 import subprocess
 import sys
 import tempfile
+import textwrap
 from pathlib import Path
 
 from . import __version__, catalog as catalog_mod
 from .catalog import Catalog, CatalogError
+from .scan import ScanReport
+from .scan import scan as scan_repo
 
 EXIT_OK = 0
 EXIT_FINDING = 1
@@ -219,6 +222,131 @@ def cmd_catalog(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+def _render_scan(report: ScanReport) -> None:
+    """The human view. Ordered so the load-bearing findings come first.
+
+    Gateway bypasses lead, because a call the company believes is metered and
+    logged but is not is the most actionable thing here. Then the model sites.
+    Then the protected actions present in the repo AT ALL — separately from
+    whether a model reaches them, because "this codebase cannot move money" and
+    "the model is gated away from money" are very different claims and only one
+    of them is usually true.
+    """
+    print(f"\nheldby scan — {report.target}")
+    print(
+        f"{report.files_scanned} files read "
+        f"({', '.join(f'{v} {k}' for k, v in sorted(report.languages.items()))})"
+    )
+
+    if report.gateways:
+        print(f"\nGATEWAY  {', '.join(report.gateways)}")
+        if report.bypass_candidates:
+            print(
+                f"\n{len(report.bypass_candidates)} BYPASS CANDIDATE(S) — a model reached outside "
+                "the gateway.\nThe gateway is not a control, but a call it never sees is unmetered, "
+                "unlogged\nand invisible to any spend or usage claim built on it."
+            )
+            for site in report.bypass_candidates:
+                print(f"  {site.file}:{site.line}  [{site.rule_id}]  {site.evidence[:90]}")
+        elif any(s.confidence == "confirmed" for s in report.sites if s.rule_id in report.gateways):
+            print("  No direct provider call found outside it.")
+        else:
+            print(
+                "  Present in config, but no confirmed call routes through it — so no bypass\n"
+                "  claim is made either way. Reads as one provider option, not a mandated path."
+            )
+
+    models = report.model_sites
+    print(f"\nMODEL SITES — {len(models)}")
+    by_file: dict[str, list] = {}
+    for site in models:
+        by_file.setdefault(site.file, []).append(site)
+    for path in sorted(by_file):
+        print(f"\n  {path}")
+        for site in sorted(by_file[path], key=lambda s: s.line):
+            mark = " " if site.confidence == "confirmed" else "?"
+            extra = []
+            if site.model:
+                extra.append(f"model={site.model}")
+            if site.label:
+                extra.append(f"label={site.label}")
+            tail = f"   {' '.join(extra)}" if extra else ""
+            print(f"   {mark} :{site.line:<5} {site.rule_id:<32} via {site.why}{tail}")
+
+    actions = report.action_sites
+    if actions:
+        grouped: dict[str, list] = {}
+        for site in actions:
+            grouped.setdefault(site.action or "?", []).append(site)
+        print(f"\nPROTECTED ACTIONS PRESENT — {len(actions)} site(s)")
+        print("  What this codebase can do. NOT a claim that a model reaches any of it.")
+        for action in sorted(grouped, key=lambda a: -len(grouped[a])):
+            files = sorted({s.file for s in grouped[action]})
+            shown = ", ".join(files[:3]) + (f" +{len(files) - 3} more" if len(files) > 3 else "")
+            print(f"    {action:<26} {len(grouped[action]):>3} site(s)  {shown}")
+
+    if report.labels:
+        names = sorted({n for v in report.labels.values() for n in v})
+        print(f"\nSELF-LABELLED PROCESSES — {len(names)}")
+        print("  What the code calls its own AI features, from its observability metadata.")
+        print("  These, not file paths, are the register's rows.")
+        for name in names:
+            print(f"    {name}")
+
+    loose = [d for d in report.dependencies if not d["imported_anywhere"]]
+    if loose:
+        print(f"\nDEPENDENCIES WITH NO IMPORT — {len(loose)}")
+        print("  Either dead weight or a use this sweep could not see. Both are findings.")
+        for dep in loose:
+            print(f"    {dep['registry']}:{dep['package']:<38} ({', '.join(dep['declared_in'])})")
+
+    if report.declarations:
+        print(f"\nALREADY DECLARED — {len(report.declarations)} file(s)")
+        for path in report.declarations:
+            print(f"    {path}")
+
+    print("\nWHAT THIS DID NOT SEE")
+    for limit in report.limits:
+        for i, chunk in enumerate(textwrap.wrap(limit, 74)):
+            print(f"  {'-' if i == 0 else ' '} {chunk}")
+
+    confirmed = sum(1 for s in models if s.confidence == "confirmed")
+    print(
+        f"\n{len(models)} model site(s): {confirmed} confirmed, {len(models) - confirmed} inferred. "
+        f"{len(actions)} protected-action site(s)."
+    )
+    print("Confidence is not accuracy. `inferred` means the shape is there and the "
+          "value flow\nwas not proven — read the code before believing either label.\n")
+
+
+def cmd_scan(args: argparse.Namespace) -> int:
+    root = Path(args.path).resolve()
+    if not root.is_dir():
+        print(f"heldby: {root} is not a directory", file=sys.stderr)
+        return EXIT_UNREADABLE
+    try:
+        cat = catalog_mod.load(Path(args.catalog) if args.catalog else catalog_mod.CATALOG_DIR)
+    except CatalogError as exc:
+        print(f"heldby: catalogue will not load — {exc}", file=sys.stderr)
+        return EXIT_UNREADABLE
+
+    report = scan_repo(
+        root,
+        cat,
+        ignore_declarations=args.ignore_declarations,
+        include_tests=args.include_tests,
+    )
+
+    if args.json:
+        print(json.dumps(report.as_dict(), indent=2))
+    else:
+        _render_scan(report)
+
+    if args.fail_on_finding and report.model_sites:
+        return EXIT_FINDING
+    return EXIT_OK
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="heldby",
@@ -242,6 +370,27 @@ def main(argv: list[str] | None = None) -> int:
     )
     cat.add_argument("--timeout", type=float, default=20.0, help="per-request timeout in seconds")
     cat.set_defaults(func=cmd_catalog)
+
+    sc = sub.add_parser("scan", help="find every place a model might run in a repo")
+    sc.add_argument("path", nargs="?", default=".", help="repo to scan (default: .)")
+    sc.add_argument("--json", action="store_true", help="machine-readable output")
+    sc.add_argument("--catalog", help="catalogue directory (defaults to the packaged one)")
+    sc.add_argument(
+        "--ignore-declarations",
+        action="store_true",
+        help="do not read existing AI declarations — for an honest inference-only run",
+    )
+    sc.add_argument(
+        "--include-tests",
+        action="store_true",
+        help="also scan test files (excluded by default; the count is always reported)",
+    )
+    sc.add_argument(
+        "--fail-on-finding",
+        action="store_true",
+        help="exit 1 if any model site is found (for gating a build)",
+    )
+    sc.set_defaults(func=cmd_scan)
 
     args = parser.parse_args(argv)
     return args.func(args)

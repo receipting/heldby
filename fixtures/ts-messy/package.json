@@ -1,0 +1,9 @@
+{
+  "name": "ts-messy",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.30.0",
+    "openai": "^4.0.0",
+    "@ai-sdk/anthropic": "^3.0.0",
+    "resend": "^4.0.0"
+  }
+}

@@ -19,7 +19,7 @@ rules:
     kind: model
     imports: { ts: ["@anthropic-ai/sdk"], py: ["anthropic"] }
     registry: { npm: ["@anthropic-ai/sdk"], pypi: ["anthropic"] }
-    match: { member: ["messages", "create"] }
+    match: { member: ["messages.create"] }
     model_arg: model
     note: Anthropic Messages API. Identical member chain in both SDKs.
 
@@ -27,14 +27,14 @@ rules:
     kind: model
     imports: { ts: ["@anthropic-ai/sdk"], py: ["anthropic"] }
     registry: { npm: ["@anthropic-ai/sdk"], pypi: ["anthropic"] }
-    match: { member: ["messages", "stream"] }
+    match: { member: ["messages.stream"] }
     model_arg: model
 
   - id: anthropic.beta.messages
     kind: model
     imports: { ts: ["@anthropic-ai/sdk"], py: ["anthropic"] }
     registry: { npm: ["@anthropic-ai/sdk"], pypi: ["anthropic"] }
-    match: { member: ["beta", "messages", "create"] }
+    match: { member: ["beta.messages.create"] }
     model_arg: model
 
   - id: anthropic.vertex
@@ -74,28 +74,28 @@ rules:
     kind: model
     imports: { ts: ["openai"], py: ["openai"] }
     registry: { npm: ["openai"], pypi: ["openai"] }
-    match: { member: ["chat", "completions", "create"] }
+    match: { member: ["chat.completions.create"] }
     model_arg: model
 
   - id: openai.responses
     kind: model
     imports: { ts: ["openai"], py: ["openai"] }
     registry: { npm: ["openai"], pypi: ["openai"] }
-    match: { member: ["responses", "create"] }
+    match: { member: ["responses.create"] }
     model_arg: model
 
   - id: openai.embeddings
     kind: model
     imports: { ts: ["openai"], py: ["openai"] }
     registry: { npm: ["openai"], pypi: ["openai"] }
-    match: { member: ["embeddings", "create"] }
+    match: { member: ["embeddings.create"] }
     note: An embedding is a model call. Vector search built on it is a Read-class AI use.
 
   - id: openai.moderations
     kind: model
     imports: { ts: ["openai"], py: ["openai"] }
     registry: { npm: ["openai"], pypi: ["openai"] }
-    match: { member: ["moderations", "create"] }
+    match: { member: ["moderations.create"] }
     note: >
       Moderation is itself a model, not a deterministic gate. A register that
       credits it as a control is claiming a model holds a model.
@@ -176,7 +176,7 @@ rules:
     kind: model
     imports: { ts: ["@mistralai/mistralai"], py: ["mistralai"] }
     registry: { npm: ["@mistralai/mistralai"], pypi: ["mistralai"] }
-    match: { member: ["chat", "complete"], symbol: ["Mistral"] }
+    match: { member: ["chat.complete"], symbol: ["Mistral"] }
 
   - id: cohere.chat
     kind: model
@@ -188,7 +188,7 @@ rules:
     kind: model
     imports: { ts: ["groq-sdk"], py: ["groq"] }
     registry: { npm: ["groq-sdk"], pypi: ["groq"] }
-    match: { member: ["chat", "completions", "create"], symbol: ["Groq"] }
+    match: { member: ["chat.completions.create"], symbol: ["Groq"] }
 
   - id: xai.chat
     kind: model
@@ -200,7 +200,7 @@ rules:
     kind: model
     imports: { ts: ["together-ai"], py: ["together"] }
     registry: { npm: ["together-ai"], pypi: ["together"] }
-    match: { member: ["chat", "completions", "create"], symbol: ["Together"] }
+    match: { member: ["chat.completions.create"], symbol: ["Together"] }
 
   - id: fireworks.chat
     kind: model
@@ -228,7 +228,7 @@ rules:
 
   - id: cloudflare.workers-ai
     kind: model
-    match: { member: ["AI", "run"], url_literal: ["@cf/"] }
+    match: { member: ["AI.run"], url_literal: ["@cf/"] }
     note: >
       A platform binding — env.AI.run(). There is no package to import, so this
       matches the member chain and the model-id prefix. Its predecessor gate

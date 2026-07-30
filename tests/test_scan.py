@@ -1,0 +1,223 @@
+"""Scanner tests.
+
+Most of these are regressions, and every regression names the real repo that
+produced it. That ordering is deliberate: each one was found by running the
+scanner over a codebase whose register we already knew the answer to, and not one
+was found by reasoning about the scanner. The predecessor tool learned the same
+lesson the same way — seven defects, all from contact with real code.
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+import pytest
+
+from heldby import catalog as catalog_mod
+from heldby.scan import LABEL_RE, REGISTRY_LOOKUP_RE, _import_hit, _variants, scan
+
+FIXTURES = Path(__file__).parent.parent / "fixtures"
+
+
+@pytest.fixture(scope="module")
+def cat():
+    return catalog_mod.load()
+
+
+def labels_of(report) -> set[str]:
+    return {name for names in report.labels.values() for name in names}
+
+
+def rules_of(report) -> set[str]:
+    return {site.rule_id for site in report.sites}
+
+
+# --- identifier folding -----------------------------------------------------
+
+
+def test_one_rule_spans_both_naming_conventions():
+    """`generateContent` and `generate_content` are the same API in two languages.
+
+    Writing both into every rule doubles the catalogue and guarantees drift.
+    """
+    assert "generate_content" in _variants("generateContent")
+    assert "generateContent" in _variants("generate_content")
+
+
+def test_import_prefix_matches_at_a_boundary_only():
+    assert _import_hit("azure.ai.inference.aio", ("azure.ai.inference",))
+    assert _import_hit("fs/promises", ("fs",))
+    assert _import_hit("anthropic", ("anthropic",))
+    # The one that matters: a rule for `open` must not claim `openai`.
+    assert not _import_hit("openai", ("open",))
+    assert not _import_hit("langchain_openai", ("langchain",))
+
+
+# --- label extraction: every shape real code uses ---------------------------
+# Each of the last three was a real declared process that went missing on the
+# first run over a repo whose register we already knew.
+
+
+@pytest.mark.parametrize(
+    ("source", "expected"),
+    [
+        ("{ process: 'matching', customer }", "matching"),
+        ('"process": "customer-report",', "customer-report"),
+        ("const PROCESS: AIFeature = 'recon-judge'", "recon-judge"),
+        ("const PROCESS_TAG: AIFeature = 'contact-extraction'", "contact-extraction"),
+        ("span_name = 'nightly-sweep'", "nightly-sweep"),
+    ],
+    ids=["inline-property", "quoted-key", "typed-constant", "suffixed-typed-constant", "assignment"],
+)
+def test_label_shapes(source: str, expected: str):
+    found = LABEL_RE.search(source)
+    assert found is not None, f"no label found in {source!r}"
+    assert found.group(1) == expected
+
+
+def test_a_process_named_only_by_a_registry_lookup_is_still_found():
+    """Some repos never write `process: '…'` anywhere.
+
+    Found for real: a repo whose two processes appear only as subscript keys, so
+    every label shape above missed both. It read as 2/2 at first only because the
+    scan was also reading unmerged branch checkouts nested inside the repo — which
+    is why those are now skipped, and why this shape needed its own rule.
+    """
+    found = REGISTRY_LOOKUP_RE.search('const CODEGEN = AI_PROCESSES["transform-codegen"];')
+    assert found is not None
+    assert found.group(1) == "transform-codegen"
+
+
+def test_registry_lookup_ignores_ordinary_config_subscripts():
+    """`CONFIG["timeout"]` is not a process, and matching it would fill the
+    register with noise. Scoped to identifiers that look like a process registry."""
+    assert REGISTRY_LOOKUP_RE.search('CONFIG["timeout"]') is None
+    assert REGISTRY_LOOKUP_RE.search('HEADERS["content-type"]') is None
+
+
+# --- the TypeScript fixture -------------------------------------------------
+
+
+def test_ts_finds_the_gateway_and_the_bypass(cat):
+    report = scan(FIXTURES / "ts-messy", cat)
+
+    assert "gateway.cloudflare-ai" in rules_of(report)
+    bypassed = {s.file for s in report.bypass_candidates}
+    assert "src/bypass.ts" in bypassed, "a direct provider call outside the gateway is the finding"
+    assert "src/gateway.ts" not in bypassed, "the gateway module is not a bypass of itself"
+
+
+def test_ts_finds_the_ungated_send(cat):
+    """A Write-class site with nothing holding it is the most useful row there is."""
+    report = scan(FIXTURES / "ts-messy", cat)
+    sends = [s for s in report.sites if s.action == "external-comms"]
+    assert any(s.file == "src/ungated.ts" for s in sends)
+
+
+def test_ts_reports_a_dependency_nobody_imports(cat):
+    """A catalogued dependency with no call site is a loose end, not a pass.
+
+    Found for real in a production repo: an AI SDK in package.json that nothing
+    imports. Either dead weight or a use the sweep cannot see; both are findings.
+    """
+    report = scan(FIXTURES / "ts-messy", cat)
+    loose = {d["package"] for d in report.dependencies if not d["imported_anywhere"]}
+    assert "@ai-sdk/anthropic" in loose
+
+
+# --- the Python fixture -----------------------------------------------------
+
+
+def test_python_langchain_is_found_by_its_module_name(cat):
+    """The whole reason `imports` is per-ecosystem.
+
+    A catalogue carrying only npm names sees nothing here: this imports
+    `langchain_anthropic`, not `@langchain/anthropic`. As originally designed,
+    the scanner reported "no AI detected" over a 95k-star Python AI repo.
+    """
+    report = scan(FIXTURES / "py-messy", cat)
+    assert "langchain.chat.models" in rules_of(report)
+
+
+def test_graph_nodes_are_the_register_rows(cat):
+    """One shared invoke helper can serve a dozen agents.
+
+    The rows worth having are the agents, which is what node registration names —
+    the files that own them import no SDK at all.
+    """
+    report = scan(FIXTURES / "py-messy", cat)
+    assert {"Triage Analyst", "Escalation Writer"} <= labels_of(report)
+
+
+def test_python_finds_model_driven_shell_execution(cat):
+    report = scan(FIXTURES / "py-messy", cat)
+    assert "anthropic.messages" in rules_of(report)
+    execs = [s for s in report.sites if s.action == "execute-code"]
+    assert any(s.file == "report.py" for s in execs)
+
+
+# --- honesty -----------------------------------------------------------------
+
+
+def test_every_site_carries_a_confidence(cat):
+    report = scan(FIXTURES / "ts-messy", cat)
+    assert report.sites
+    assert all(s.confidence in {"confirmed", "inferred"} for s in report.sites)
+
+
+def test_the_report_always_states_what_it_could_not_see(cat):
+    """A proof that names its own limits is the only kind worth publishing."""
+    report = scan(FIXTURES / "py-messy", cat)
+    blob = " ".join(report.limits).lower()
+    assert "taint" in blob, "it must never be mistaken for taint analysis"
+    assert "factory" in blob, "the factory blind spot is structural and must be declared"
+    assert "not scanned" in blob or "were not" in blob
+
+
+def test_excluded_scope_is_never_silent(cat):
+    """A scope you cannot see is a scope you cannot audit.
+
+    Tests are excluded by default because they bury real sites — but the count
+    must appear in the report, or the exclusion reads as "covered everything".
+    """
+    report = scan(FIXTURES / "py-messy", cat, include_tests=False)
+    if report.files_skipped.get("tests"):
+        assert any("test file" in limit for limit in report.limits)
+
+
+def test_declarations_can_be_masked_for_an_honest_run(cat):
+    """The acceptance test would be circular otherwise.
+
+    Pointed at a repo that declares its own processes, reading the declaration is
+    reading the answer. The flag withholds it and says so in the limits.
+    """
+    read = scan(FIXTURES / "py-messy", cat)
+    masked = scan(FIXTURES / "py-messy", cat, ignore_declarations=True)
+    assert read.declarations, "the fixture does declare"
+    assert not masked.declarations
+    assert any("pure inference" in limit for limit in masked.limits)
+
+
+def test_nested_branch_checkouts_are_skipped_but_reported(cat, tmp_path):
+    """A nested checkout is another branch's code, not this branch's.
+
+    Scanning it surfaces unmerged work as though it had shipped. Found for real:
+    an undeclared process living only in two branch worktrees inside a repo.
+    """
+    (tmp_path / ".claude" / "worktrees" / "epic" / "src").mkdir(parents=True)
+    (tmp_path / ".claude" / "worktrees" / "epic" / "src" / "q.ts").write_text(
+        "import Anthropic from '@anthropic-ai/sdk'\n"
+        "const x = { process: 'undeclared-thing' }\n",
+        encoding="utf-8",
+    )
+    report = scan(tmp_path, cat)
+    assert "undeclared-thing" not in labels_of(report)
+    assert report.files_skipped.get("nested-checkouts") == 1
+    assert any("nested checkout" in limit for limit in report.limits)
+
+
+def test_scan_is_deterministic(cat):
+    """Two runs, byte-identical. A report that drifts cannot be diffed in CI."""
+    first = scan(FIXTURES / "ts-messy", cat).as_dict()
+    second = scan(FIXTURES / "ts-messy", cat).as_dict()
+    assert first == second
