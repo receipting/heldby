@@ -45,7 +45,7 @@ control it cannot find in the code is a question, not an assumption.
 The deterministic half is an ordinary CLI:
 
 ```bash
-uvx --from git+https://github.com/receipting/heldby heldby scan .
+uvx heldby scan .
 ```
 
 That prints every candidate model call site, every protected action near it, what the code
@@ -55,16 +55,16 @@ calls its own AI features, and — read this part first — what the sweep could
 Same form for the others, e.g. to check the detection surface is not stale:
 
 ```bash
-uvx --from git+https://github.com/receipting/heldby heldby catalog --check-registries
+uvx heldby catalog --check-registries
 ```
 
 To put it on your PATH instead:
 
 ```bash
-uv tool install git+https://github.com/receipting/heldby
+uv tool install heldby
 ```
 
-…after which it is just `heldby scan .`. (Not on PyPI yet, hence the git URL.)
+…after which it is just `heldby scan .`.
 
 ### In CI
 
@@ -72,7 +72,7 @@ uv tool install git+https://github.com/receipting/heldby
 gate a build:
 
 ```yaml
-- run: uvx --from git+https://github.com/receipting/heldby heldby lint .
+- run: uvx heldby lint .
 ```
 
 Run `heldby adopt .` first to seed the config and the baseline — without them the gate has
@@ -222,10 +222,10 @@ pull request without touching any logic.
 
 ```bash
 # print the entire detection surface
-uvx --from git+https://github.com/receipting/heldby heldby catalog
+uvx heldby catalog
 
 # resolve every catalogued package name against npm and PyPI
-uvx --from git+https://github.com/receipting/heldby heldby catalog --check-registries
+uvx heldby catalog --check-registries
 ```
 
 Two design rules make the catalogue trustworthy:

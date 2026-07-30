@@ -85,8 +85,8 @@ The workflow refuses to publish if the tag and the version disagree, so
   both silent and total.
 - The git tag matches the declared version.
 
-## After the first release
+## History
 
-Update the README to the short form — `uvx heldby scan .` — and drop the
-`--from git+https://…` workaround. Until then the git URL is correct and the short form is a
-lie, which is how it got written the first time.
+`0.1.0` published 30 July 2026 — the first release, and the one that created the project on
+PyPI. The pending publisher became a real one at that point, so `docs` and the README now use
+the short `uvx heldby` form.
