@@ -390,6 +390,7 @@ def cmd_register(args: argparse.Namespace) -> int:
                 reaches=list(raw.get("reaches") or []),
                 source=raw.get("source", "declared"),
                 covers=list(raw.get("covers") or []),
+                files=list(raw.get("files") or []),
             )
         )
 

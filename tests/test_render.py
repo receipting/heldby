@@ -175,3 +175,30 @@ def test_an_unlocated_row_blames_naming_first(scans):
     markdown = render_markdown(_register([ghost]), scans)
     assert "Check the names first" in markdown
     assert "`covers`" in markdown
+
+
+def test_a_model_call_no_row_claims_is_reported(scans):
+    """The stronger completeness claim.
+
+    Label coverage asks whether every name found is written down. This asks whether
+    every place a model runs is accounted for — and plenty of real processes never
+    name themselves, so the first check cannot see them at all.
+    """
+    payload = render_json(_register([GOOD]), scans)
+    unattributed = payload["completeness"]["unattributed_model_sites"]
+    assert unattributed, "the fixtures contain model calls no row claims"
+    assert "no row in this register claims" in render_markdown(_register([GOOD]), scans)
+
+
+def test_a_row_claiming_its_files_is_located_without_a_label(scans):
+    """Thirteen agents can be plainly visible as call sites while naming themselves
+    nowhere. Pointing a row at the files locates it."""
+    every_file = sorted({s.file for r in scans.values() for s in r.model_sites})
+    row = Process(
+        name="a-process-the-code-never-names",
+        ai_class="decide", model="selected at runtime", repo="x",
+        does="d", held_by="h", files=every_file,
+    )
+    payload = render_json(_register([row]), scans)
+    assert payload["completeness"]["unattributed_model_sites"] == []
+    assert payload["completeness"]["declared_but_not_located"] == []

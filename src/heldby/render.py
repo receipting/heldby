@@ -56,6 +56,13 @@ class Process:
     #: in their prompt are one process, not thirteen — and the completeness check
     #: has to resolve those labels to this row or it reports them as undeclared.
     covers: list[str] = field(default_factory=list)
+    #: Files or path prefixes whose model call sites this row accounts for. The
+    #: stronger completeness claim: not every label is declared, but every model
+    #: call site in the repo is attributable to some row. Plenty of real processes
+    #: never label themselves at all — thirteen agents can be plainly visible as
+    #: call sites while naming themselves nowhere — so a check that only compares
+    #: names cannot see whether the register actually covers the code.
+    files: list[str] = field(default_factory=list)
 
     @property
     def has_control(self) -> bool:
@@ -84,6 +91,22 @@ def _cell(text: str) -> str:
     return text.replace("|", "\\|").replace("\n", " ").strip()
 
 
+def _unattributed_sites(register: Register, scans: dict[str, ScanReport]) -> list[str]:
+    """Files containing a model call that no register row claims.
+
+    Label coverage answers "is every name we found written down". This answers the
+    question that actually matters: "is every place a model runs accounted for".
+    """
+    claimed = [f.rstrip("/") for p in register.processes for f in p.files]
+    out: set[str] = set()
+    for report in scans.values():
+        for site in report.model_sites:
+            if any(site.file == c or site.file.startswith(f"{c}/") for c in claimed):
+                continue
+            out.add(site.file)
+    return sorted(out)
+
+
 def _completeness(register: Register, scans: dict[str, ScanReport]) -> tuple[list[str], list[str]]:
     """Compare what was declared against what the sweep found.
 
@@ -107,7 +130,9 @@ def _completeness(register: Register, scans: dict[str, ScanReport]) -> tuple[lis
     unfound = sorted(
         p.name
         for p in register.processes
-        if p.name not in found and not (set(p.covers) & found)
+        # A row that points at real files is located, whether or not the code ever
+        # says its name out loud.
+        if p.name not in found and not (set(p.covers) & found) and not p.files
     )
     return undeclared, unfound
 
@@ -312,6 +337,7 @@ def render_markdown(
     total_models = sum(len(r.model_sites) for r in scans.values())
     total_actions = sum(len(r.action_sites) for r in scans.values())
 
+    unattributed = _unattributed_sites(register, scans)
     out.append("## Independent completeness check")
     out.append("")
     out.append(
@@ -341,6 +367,19 @@ def render_markdown(
             "appears in the register above, or in the out-of-scope table."
         )
         out.append("")
+    if unattributed:
+        out.append(
+            f"**{len(unattributed)} file(s) contain a model call that no row in this register "
+            "claims.** Label coverage asks whether every name found is written down; this asks "
+            "the question that matters — whether every place a model runs is accounted for. "
+            "A process that never names itself is invisible to the first check and caught by "
+            "this one:"
+        )
+        out.append("")
+        for path in unattributed:
+            out.append(f"- `{path}`")
+        out.append("")
+
     if unfound:
         out.append(
             f"{len(unfound)} declared process(es) could not be located by the sweep "
@@ -393,6 +432,7 @@ def render_json(register: Register, scans: dict[str, ScanReport]) -> dict:
                 "does": p.does,
                 "reaches": p.reaches,
                 "covers": p.covers,
+                "files": p.files,
                 "held_by": p.held_by,
                 "has_control": p.has_control,
                 "source": p.source,
@@ -414,6 +454,7 @@ def render_json(register: Register, scans: dict[str, ScanReport]) -> dict:
             "model_sites": sum(len(r.model_sites) for r in scans.values()),
             "protected_action_sites": sum(len(r.action_sites) for r in scans.values()),
             "undeclared_processes": undeclared,
+            "unattributed_model_sites": _unattributed_sites(register, scans),
             "declared_but_not_located": unfound,
         },
         "limits": _aggregate_limits(scans),

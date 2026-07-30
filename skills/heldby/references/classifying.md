@@ -65,11 +65,17 @@ When you group, two things are required:
   while the code calls itself something else reports as a process that could not be located
   — a naming mismatch masquerading as a gap.
 - **Set `covers`** to every label the row stands for, and name the members in `does`.
+- **Set `files`** to the paths whose model calls the row accounts for. This matters more
+  than `covers`: plenty of real processes never label themselves at all, and a register can
+  be complete while every one of its rows is invisible to a name-based check. The completeness
+  check reports any file with a model call that no row claims — that is the question worth
+  answering, and the only one that catches a process you forgot entirely.
 
 ```yaml
 - name: investor-analysts
   class: decide
-  covers: [warren_buffett, ben_graham, cathie_wood]   # every label this row absorbs
+  covers: [warren_buffett, ben_graham, cathie_wood]   # labels this row absorbs, if any
+  files: [src/agents/]                                # the call sites it accounts for
   does: Thirteen agents that differ only in their prompt, each emitting a signal.
 ```
 
@@ -211,6 +217,7 @@ processes:
     # Never guess an id to fill the column. Most real code selects at runtime, and
     # a fabricated model id discredits every honest row next to it.
     covers: []                     # other labels this row stands for, if grouped
+    files: [src/agents/]           # paths whose model calls this row accounts for
     component: simplet
     does: Matches an incoming payment to the invoices it pays.
     reaches: [move-money]
