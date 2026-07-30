@@ -324,3 +324,51 @@ def test_a_deferred_import_by_string_counts(cat, tmp_path):
     )
     report = scan(tmp_path, cat)
     assert "litellm.completion" in {s.rule_id for s in report.sites}
+
+
+def test_notebook_magics_do_not_break_the_parse(cat, tmp_path):
+    """`!pip install …` on line 1 is not Python.
+
+    One of them failed the parse of a whole notebook, and every import-gated rule
+    then silently could not fire in it — 15 of one repository's 39 notebooks were
+    losing their imports this way, costing 20 model call sites.
+    """
+    import json as _json
+
+    (tmp_path / "nb.ipynb").write_text(
+        _json.dumps({"cells": [
+            {"cell_type": "code", "source": ["!pip install anthropic\n", "%matplotlib inline\n"]},
+            {"cell_type": "code", "source": ["import anthropic\n",
+                                             "anthropic.Anthropic().messages.create(model='x')\n"]},
+        ]}),
+        encoding="utf-8",
+    )
+    report = scan(tmp_path, cat)
+    assert "anthropic.messages" in {s.rule_id for s in report.sites}
+    assert not any("would not parse" in limit for limit in report.limits)
+
+
+def test_huggingface_dataset_columns_are_not_processes(cat, tmp_path):
+    """`features["input_ids"]` is the datasets column-schema API, ubiquitous in ML
+    code. It filled a register with `seq_len` and `out_text` as AI processes — six
+    of seven "named processes" in one repository were tensor fields."""
+    (tmp_path / "t.py").write_text(
+        'x = features["input_ids"]\ny = features["seq_len"]\n'
+        'z = AI_PROCESSES["real-thing"]\n',
+        encoding="utf-8",
+    )
+    found = {n for names in scan(tmp_path, cat).labels.values() for n in names}
+    assert "real-thing" in found
+    assert not ({"input_ids", "seq_len"} & found)
+
+
+def test_an_unparsed_notebook_is_not_called_a_python_file(cat, tmp_path):
+    """Misattributing its own failure sends a reader looking in the wrong place."""
+    import json as _json
+
+    (tmp_path / "bad.ipynb").write_text(
+        _json.dumps({"cells": [{"cell_type": "code", "source": ["def broken(:\n"]}]}),
+        encoding="utf-8",
+    )
+    report = scan(tmp_path, cat)
+    assert any("notebook(s) would not parse" in limit for limit in report.limits)

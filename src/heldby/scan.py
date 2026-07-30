@@ -104,6 +104,12 @@ LABEL_STOPLIST = frozenset({
     "developer", "bot", "agent", "none", "default", "true", "false", "null",
     "prompt", "message", "content", "text", "json", "string", "object", "input",
     "output", "error", "unknown", "test", "example", "name", "id", "key", "value",
+    # Tensor and dataset fields. These share the label shape and are never a
+    # process; a register listing `input_ids` as an AI use is not read twice.
+    "input_ids", "attention_mask", "token_type_ids", "labels", "logits",
+    "seq_len", "max_length", "instruction", "context", "answer", "question",
+    "response", "completion", "out_text", "target", "label", "features", "train",
+    "validation", "embedding", "embeddings", "tokens", "temperature",
 })
 #: Matches three shapes, because real code uses all three:
 #:   process: 'matching'                        an inline object property
@@ -140,8 +146,13 @@ LABEL_RE = re.compile(
 #: register with noise. This reads a USAGE site, not a declaration — it learns that
 #: a process by this name runs here, and nothing about its class or what holds it,
 #: which is the line --ignore-declarations has to keep to stay honest.
+#: `feature`/`features` was removed 30 Jul 2026: `features["input_ids"]` is the
+#: HuggingFace datasets column-schema API, ubiquitous in ML code, and it filled a
+#: register with `seq_len`, `out_text` and `input_ids` as though they were AI
+#: processes. Six of seven "named processes" in one repository were tensor fields.
+#: `feature: "x"` as a LABEL is still meaningful and stays in LABEL_RE.
 REGISTRY_LOOKUP_RE = re.compile(
-    r"\b[\w$]*(?:process|processes|feature|features|agent|agents)[\w$]*\s*"
+    r"\b[\w$]*(?:process|processes|agents)[\w$]*\s*"
     r"\[\s*[\"'`]([A-Za-z][\w.\- ]{1,60})[\"'`]\s*\]",
     re.IGNORECASE,
 )
@@ -275,15 +286,29 @@ def notebook_source(text: str) -> str | None:
     if not isinstance(doc, dict) or "cells" not in doc:
         return None
 
+    def strip_magics(code: str) -> str:
+        """Blank out IPython magics and shell escapes, keeping line numbering.
+
+        `!pip install …` and `%matplotlib inline` are not Python. One of them at
+        the top of a notebook fails the whole parse, and every import-gated rule
+        then silently cannot fire in that file — 15 of one repository's 39
+        notebooks were losing their imports to a single `!pip install` on line 1.
+        """
+        lines = []
+        for line in code.split("\n"):
+            stripped = line.lstrip()
+            lines.append("" if stripped[:1] in {"!", "%", "?"} else line)
+        return "\n".join(lines)
+
     out: list[str] = []
     for cell in doc.get("cells") or []:
         if not isinstance(cell, dict) or cell.get("cell_type") != "code":
             continue
         source = cell.get("source")
         if isinstance(source, list):
-            out.append("".join(s for s in source if isinstance(s, str)))
+            out.append(strip_magics("".join(s for s in source if isinstance(s, str))))
         elif isinstance(source, str):
-            out.append(source)
+            out.append(strip_magics(source))
     return "\n".join(out) if out else None
 
 
@@ -649,11 +674,16 @@ def scan(
     if skipped.get("unreadable"):
         limits.append(f"{skipped['unreadable']} file(s) could not be read.")
     if unparsed:
-        shown = ", ".join(unparsed[:5]) + (" …" if len(unparsed) > 5 else "")
-        limits.append(
-            f"{len(unparsed)} Python file(s) would not parse, so their imports are unknown and "
-            f"import-gated rules could not fire in them: {shown}"
-        )
+        nbs = [f for f in unparsed if f.lower().endswith(".ipynb")]
+        pys = [f for f in unparsed if not f.lower().endswith(".ipynb")]
+        for kind, group in (("notebook", nbs), ("Python file", pys)):
+            if not group:
+                continue
+            shown = ", ".join(group[:5]) + (" …" if len(group) > 5 else "")
+            limits.append(
+                f"{len(group)} {kind}(s) would not parse, so their imports are unknown and "
+                f"import-gated rules could not fire in them: {shown}"
+            )
     if declarations:
         state = "IGNORED (--ignore-declarations), so this run is pure inference" if ignore_declarations else "read"
         limits.append(f"{len(declarations)} file(s) carry an AI declaration; declarations were {state}.")
