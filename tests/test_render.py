@@ -299,3 +299,18 @@ def test_reaches_provenance_matches_how_the_run_was_made(scans):
     text = " ".join(_aggregate_limits(scans))
     assert "reader's inference from the code" in text, "these fixtures ignore declarations"
     assert "reviewed claim" not in text
+
+
+def test_scope_table_columns_are_20_40_40(scans):
+    """The two prose columns need equal room. Under auto layout the browser hands
+    width to whichever column has the longest unbreakable run — the Item column is
+    all identifiers — and the last column collapses to a ribbon."""
+    from heldby.html import render_html
+
+    excluded = [{"name": "a-very-long-identifier-name", "what": "x", "why": "y"}]
+    page = render_html(_register([GOOD], excluded=excluded), scans)
+    assert 'table class="scope"' in page
+    assert "table.scope { table-layout:fixed; }" in page
+    for n, w in ((1, "20%"), (2, "40%"), (3, "40%")):
+        assert f"table.scope td:nth-child({n}) {{ width:{w}; }}" in page
+    assert "table.scope code { overflow-wrap:anywhere" in page, "identifiers must wrap"

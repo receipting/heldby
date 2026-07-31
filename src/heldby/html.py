@@ -57,6 +57,18 @@ th { text-align:left; background:#f4f4f8; font-weight:650; font-size:12px;
   text-transform:uppercase; letter-spacing:.05em; color:var(--muted); }
 th, td { padding:7px 9px; border-bottom:1px solid var(--rule); vertical-align:top; }
 td:first-child { white-space:nowrap; }
+/* The scope table's third column was collapsing to a ribbon: with auto layout the
+   browser hands width to whichever column has the longest unbreakable run, and the
+   Item column is all code. Fixed layout and explicit widths instead — 20/40/40, so
+   the two prose columns get equal room and the identifier column takes what it
+   needs. */
+table.scope { table-layout:fixed; }
+table.scope td:first-child { white-space:normal; }
+table.scope th:nth-child(1), table.scope td:nth-child(1) { width:20%; }
+table.scope th:nth-child(2), table.scope td:nth-child(2) { width:40%; }
+table.scope th:nth-child(3), table.scope td:nth-child(3) { width:40%; }
+/* A long identifier must wrap rather than force a column wider than its share. */
+table.scope code { overflow-wrap:anywhere; word-break:break-word; }
 .banner { background:#fff8e6; border:1px solid #f0d999; border-radius:6px;
   padding:10px 13px; margin:0 0 18px; font-size:13.5px; }
 .classes { list-style:none; padding:0; margin:0 0 12px; }
@@ -181,7 +193,8 @@ def render_html(register: Register, scans: dict[str, ScanReport]) -> str:
             add(f"<p>{_md(note)}</p>")
         if register.excluded:
             add("<p>Outside scope, named rather than dropped:</p>")
-            add("<table><thead><tr><th>Item</th><th>What it is</th><th>Why it's out</th>"
+            add('<table class="scope"><thead><tr><th>Item</th><th>What it is</th>'
+                "<th>Why it's out</th>"
                 "</tr></thead><tbody>")
             for item in register.excluded:
                 add(f"<tr><td><code>{html_mod.escape(str(item.get('name', '?')))}</code></td>"
