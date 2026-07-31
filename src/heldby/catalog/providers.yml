@@ -683,3 +683,37 @@ rules:
       symbol: ["ChatXAI", "ChatPerplexity", "ChatFireworks", "ChatHuggingFace", "HuggingFaceEndpoint", "ChatNVIDIA"]
     note: >
       LangChain partner distributions whose module names no existing rule lists. langchain.chat.models already carries ChatXAI, ChatPerplexity and ChatFireworks as symbols but not the modules they are imported from, so a repo using them was matched by neither import nor package name. Only `from langchain_xai import ChatXAI` was read from a package page; the other class names follow LangChain's Chat<Vendor> convention and each distribution name was resolved against PyPI.
+
+  - id: aisdk.agent
+    kind: model
+    imports:
+      ts: ["ai"]
+    registry:
+      npm: ["ai"]
+    match:
+      symbol: ["ToolLoopAgent", "Agent"]
+    note: >
+      The AI SDK's agent entry point, which the existing aisdk.generate symbol list does not carry: the agent is constructed once and then driven by a generic .generate()/.stream() member, so a repo built this way has no generateText call anywhere for the scanner to find. Added as a separate rule so aisdk.generate is untouched. Only ToolLoopAgent was read from the AI SDK's own documentation; Agent is the earlier name for the same class and matches only when imported from `ai`.
+  - id: azure.ai-projects
+    kind: model
+    imports:
+      py: ["azure.ai.projects"]
+    registry:
+      pypi: ["azure-ai-projects"]
+    match:
+      construct: true
+      symbol: ["AIProjectClient"]
+    note: >
+      Microsoft Foundry projects, whose client reaches both model inference and a hosted agent runtime with code-interpreter and web-search tools, so one construction site stands in for an unbounded set of effects. The import is dotted (azure.ai.projects) while the distribution is hyphenated, and this is a different distribution from the already-catalogued azure-ai-inference. Matches construction because the downstream calls are generic members off the client; the async client at azure.ai.projects.aio shares the import prefix and the class name. The npm counterpart is not covered here.
+  - id: provider.cohere
+    kind: model
+    match:
+      url_literal: ["api.cohere.com", "api.cohere.ai"]
+    note: >
+      The Cohere host as a configured base URL. cohere.chat covers the vendor SDK, but nothing in the catalogue caught a Cohere endpoint reached through an OpenAI-compatible client or hand-rolled HTTP. Both hosts are listed because the older api.cohere.ai name still appears in deployed configuration.
+  - id: provider.voyage
+    kind: model
+    match:
+      url_literal: ["api.voyageai.com"]
+    note: >
+      Voyage embedding and rerank models, which had no coverage of any kind. Matches the host only, so a repo using the vendor's own SDK with no base URL in the source is still missed.
