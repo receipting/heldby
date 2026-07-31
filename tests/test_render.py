@@ -253,3 +253,49 @@ def test_drafted_count_is_in_the_machine_output(scans):
     assert payload["counts"]["drafted_unreviewed"] == 1
     row = next(p for p in payload["processes"] if p["name"] == "drafted-thing")
     assert row["source"] == "drafted"
+
+
+def test_html_is_one_self_contained_file(scans):
+    """It has to survive being emailed as a single attachment with nothing
+    alongside it, so no external request of any kind."""
+    from heldby.html import render_html
+
+    page = render_html(_register([GOOD, GAP]), scans)
+    assert page.startswith("<!doctype html>")
+    for forbidden in ("<script", "src=", "@import", "//fonts.", "cdn."):
+        assert forbidden not in page, f"external dependency: {forbidden}"
+    assert "<style>" in page and "@page" in page, "must carry its own print stylesheet"
+
+
+def test_html_marks_the_gap_and_the_draft(scans):
+    from heldby.html import render_html
+
+    page = render_html(_register([GOOD, GAP]), scans)
+    assert "nothing</span>" in page
+    assert "have nothing holding them" in page
+
+
+def test_html_escapes_source_it_quotes(scans):
+    """The register quotes real source lines and some of them contain HTML."""
+    from heldby.html import render_html
+
+    row = Process(
+        name="x", ai_class="read", model="m", repo="r",
+        does='renders <script>alert(1)</script> into the page',
+        held_by="output is escaped by `escapeHtml`",
+    )
+    page = render_html(_register([row]), scans)
+    assert "<script>alert(1)</script>" not in page
+    assert "&lt;script&gt;" in page
+    assert "<code>escapeHtml</code>" in page, "inline markdown still renders"
+
+
+def test_reaches_provenance_matches_how_the_run_was_made(scans):
+    """A declared run reports a reviewed claim; an inferred run reports a
+    reading. Printing the declared wording over an inferred run overstates the
+    provenance of the column an auditor leans on hardest."""
+    from heldby.render import _aggregate_limits
+
+    text = " ".join(_aggregate_limits(scans))
+    assert "reader's inference from the code" in text, "these fixtures ignore declarations"
+    assert "reviewed claim" not in text

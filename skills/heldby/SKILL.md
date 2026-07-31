@@ -106,8 +106,13 @@ Then render:
 
 ```bash
 uv run --directory ${CLAUDE_SKILL_DIR}/../.. heldby register \
-  --classification <file>.yml --out-md ai-register.md --out-json ai-register.json
+  --classification <file>.yml --out-md ai-register.md \
+  --out-json ai-register.json --out-html ai-register.html
 ```
+
+Always write the HTML too. It is the copy a person actually reads and shares —
+one self-contained file, printed to PDF from any browser with Cmd-P. Tell the
+user it is there.
 
 The renderer will not invent a control and will not soften a missing one: an empty
 `held_by` prints as **nothing**, in bold. That is correct — leave it empty when

@@ -38,6 +38,12 @@ Then from your repo, `/heldby` — or just ask for an AI register and it trigger
 sweeps, reads the code around every call site, argues with its own answers, and writes
 `ai-register.md`. Every row it drafts is marked † until you review it.
 
+You get `ai-register.md`, `ai-register.json`, and — with `--out-html` — a
+self-contained HTML register that prints to PDF from any browser (Cmd-P). One
+file, no assets, nothing to install: heldby has a single dependency and a PDF
+library would drag in a system toolchain, which is the fastest way to stop a tool
+being pointed at unfamiliar repos.
+
 **The inventory alone**, no Claude Code:
 
 ```bash
@@ -163,7 +169,7 @@ reviewed artefact. CI checks that artefact is current; it never re-infers it.
 | `heldby scan <repo>` | Every candidate model call site, every protected action near it, and what it couldn't see | no |
 | `heldby context <repo>` | The code a classifier needs per site — enclosing function, protected actions in the file, one-hop callees — ranked worst-first | no |
 | *(the skill)* | Reads those packets and assigns class, reach and `held_by` | **yes** |
-| `heldby register` | Renders the register, plus an independent completeness check | no |
+| `heldby register` | Renders the register (`--out-md`, `--out-json`, `--out-html`) plus an independent completeness check | no |
 | `heldby lint <repo>` | Fails the build on a model call outside the designated gateway module | no |
 | `heldby adopt <repo>` | Writes declarations and the gate into the repo, so the next run is declared not guessed | no |
 | `heldby catalog` | Prints the detection surface; `--check-registries` resolves every package name | no |

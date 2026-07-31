@@ -272,6 +272,7 @@ class ScanReport:
     gateways: list[str]
     bypass_candidates: list[Site]
     declarations: list[str]
+    declarations_ignored: bool
     limits: list[str]
     provenance: list[dict]
 
@@ -770,6 +771,7 @@ def scan(
         gateways=gateways,
         bypass_candidates=bypass,
         declarations=[] if ignore_declarations else sorted(declarations),
+        declarations_ignored=ignore_declarations,
         limits=limits,
         provenance=catalog.provenance(),
     )

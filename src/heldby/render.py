@@ -168,10 +168,22 @@ def _completeness(register: Register, scans: dict[str, ScanReport]) -> tuple[lis
 
 
 #: Caveats that hold for every sweep regardless of what it found. Stated once.
-UNIVERSAL_LIMITS = [
+#: The first one has two forms, because where `reaches` came from changes what the
+#: sentence may claim: a declared run reports a reviewed claim, an inferred run
+#: reports somebody's reading. Printing the declared wording over an inferred run
+#: overstates the provenance of the column an auditor leans on hardest.
+TAINT_LIMIT_DECLARED = (
     "**This is not taint analysis and must not be read as any.** The sweep has no call graph "
     "and no value flow. `Reaches` above is a reviewed claim from each component's own "
-    "declaration, never a path proved from the source.",
+    "declaration, never a path proved from the source."
+)
+TAINT_LIMIT_INFERRED = (
+    "**This is not taint analysis and must not be read as any.** The sweep has no call graph "
+    "and no value flow. Declarations were ignored on this run, so `Reaches` above is a "
+    "reader's inference from the code — cited, but not proved."
+)
+
+UNIVERSAL_LIMITS = [
     "A model client built by a factory in one module and called in another leaves no call site "
     "in the module that owns the feature. The sweep reports both and links neither, so a "
     "process is credited to a component by its declaration rather than by where its client "
@@ -205,7 +217,8 @@ SKIP_PROSE = {
 
 
 def _aggregate_limits(scans: dict[str, ScanReport]) -> list[str]:
-    out = list(UNIVERSAL_LIMITS)
+    inferred = any(r.declarations_ignored for r in scans.values())
+    out = [TAINT_LIMIT_INFERRED if inferred else TAINT_LIMIT_DECLARED, *UNIVERSAL_LIMITS]
 
     out.append(
         "The sweep was run with declarations deliberately hidden from it, so that its "

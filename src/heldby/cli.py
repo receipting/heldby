@@ -22,6 +22,7 @@ from .catalog import Catalog, CatalogError
 from . import adopt as adopt_mod
 from .context import build_packets, render_packets
 from . import lint as lint_mod
+from .html import render_html
 from .render import Process, Register, render_json, render_markdown
 from .scan import ScanReport
 from .scan import scan as scan_repo
@@ -442,7 +443,13 @@ def cmd_register(args: argparse.Namespace) -> int:
     if args.out_json:
         Path(args.out_json).write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
         print(f"wrote {args.out_json}", file=sys.stderr)
-    if not args.out_md and not args.out_json:
+    if args.out_html:
+        Path(args.out_html).write_text(render_html(register, scans), encoding="utf-8")
+        print(
+            f"wrote {args.out_html} — open it and print to PDF (Cmd-P) for a shareable copy",
+            file=sys.stderr,
+        )
+    if not args.out_md and not args.out_json and not args.out_html:
         print(json.dumps(payload, indent=2) if args.json else markdown)
 
     undeclared = payload["completeness"]["undeclared_processes"]
@@ -670,6 +677,11 @@ def main(argv: list[str] | None = None) -> int:
     )
     reg.add_argument("--out-md", metavar="FILE", help="write the human register here")
     reg.add_argument("--out-json", metavar="FILE", help="write the machine register here")
+    reg.add_argument(
+        "--out-html",
+        metavar="FILE",
+        help="write a self-contained HTML register — open it and Cmd-P for a PDF",
+    )
     reg.add_argument("--json", action="store_true", help="print JSON instead of markdown")
     reg.add_argument(
         "--fail-on-gap",
