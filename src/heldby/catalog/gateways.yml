@@ -76,3 +76,16 @@ rules:
       URL is the only tell. Fires on the assignment wherever it appears —
       including inside a provider registry, which is where it usually lives
       rather than at any call site.
+
+  - id: gateway.langsmith
+    kind: model
+    imports:
+      py: ["langsmith"]
+      ts: ["langsmith"]
+    registry:
+      npm: ["langsmith"]
+      pypi: ["langsmith"]
+    match:
+      url_literal: ["api.smith.langchain.com"]
+    note: >
+      Observability rather than a proxy, the same shape as the langfuse rule: it does not stand between a model's output and an effect, but it names the traced runs. Matches the host and the package; a repo tracing through LangChain's own callbacks with only an environment variable set leaves no langsmith import and is missed.
