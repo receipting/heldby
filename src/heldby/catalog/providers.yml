@@ -717,3 +717,68 @@ rules:
       url_literal: ["api.voyageai.com"]
     note: >
       Voyage embedding and rerank models, which had no coverage of any kind. Matches the host only, so a repo using the vendor's own SDK with no base URL in the source is still missed.
+
+  - id: aisdk.python
+    kind: model
+    imports:
+      py: ["ai"]
+    registry:
+      pypi: ["ai"]
+    match:
+      symbol: ["get_model", "Agent", "stream"]
+    note: >
+      Vercel's AI SDK for Python, published by Vercel as the PyPI distribution `ai` and imported as `ai`. The catalogue carried the npm distribution of the same name under aisdk.generate and aisdk.agent, with no py entry, so a Python repo built on it matched nothing. Added as a new rule rather than a py key on the existing ones so their match is untouched. get_model, Agent and stream were read from the package page's usage example; the tool decorator is not matched because it registers a tool rather than calling a model, and members driven off a constructed agent are not covered.
+  - id: voyage.sdk
+    kind: model
+    imports:
+      py: ["voyageai"]
+    registry:
+      pypi: ["voyageai"]
+    match:
+      member: ["embed", "rerank"]
+      symbol: ["Client", "AsyncClient"]
+    note: >
+      Voyage embedding and rerank models through the vendor's own client. provider.voyage matches the host only, and its own note records that a repo using the SDK with no base URL in the source is missed; this is that case. The package page constructs voyageai.Client() and calls embed and rerank, so both are matched, and Client is only meaningful scoped to this import. AsyncClient follows the vendor's naming and was not read from the page. No npm counterpart is claimed.
+  - id: zhipu.legacy-sdk
+    kind: model
+    imports:
+      py: ["zhipuai"]
+    registry:
+      pypi: ["zhipuai"]
+    match:
+      construct: true
+      symbol: ["ZhipuAI"]
+    model_arg: model
+    note: >
+      The older Zhipu GLM distribution, which the zai.chat note names explicitly as a different package that rule does not cover. Matches construction because the call chain is chat.completions.create, indistinguishable from an OpenAI call once the client sits in a variable. The mainland and international endpoint split is carried by zai-sdk, not here.
+  - id: local.llama-cpp
+    kind: model
+    imports:
+      py: ["llama_cpp"]
+    registry:
+      pypi: ["llama-cpp-python"]
+    match:
+      construct: true
+      symbol: ["Llama"]
+    note: >
+      A GGUF model loaded and run in-process, the same blind spot local.transformers and local.vllm cover for other runtimes: no API key, no base URL and no network call, so every URL- and env-based rule in this catalogue is blind to it. The import is llama_cpp and the distribution llama-cpp-python. The package also ships an OpenAI-compatible server, which is reached over HTTP and already covered by llm.http.chat-completions.
+  - id: bedrock.agent-runtime
+    kind: model
+    imports:
+      ts: ["@aws-sdk/client-bedrock-agent-runtime"]
+    registry:
+      npm: ["@aws-sdk/client-bedrock-agent-runtime"]
+    match:
+      symbol: ["InvokeAgentCommand", "RetrieveAndGenerateCommand", "InvokeFlowCommand"]
+    note: >
+      A hosted Bedrock agent or knowledge-base retrieval invoked from TypeScript. This is a separate distribution from @aws-sdk/client-bedrock-runtime, which bedrock.invoke covers, and one call drives an agent session whose tool use is not visible to a scan. The distribution name and version were resolved against the npm registry; the command class names follow the AWS SDK v3 convention and were NOT read from the package's own documentation, so a repo using a command not listed here is caught by its import but not by symbol.
+  - id: provider.bedrock-agent.service
+    kind: model
+    imports:
+      py: ["boto3", "aioboto3"]
+    registry:
+      pypi: ["boto3"]
+    match:
+      url_literal: ["bedrock-agent-runtime"]
+    note: >
+      The Python shape of the same thing: boto3.client("bedrock-agent-runtime"), where the service string is the only tell separating an agent invocation from any other AWS call, exactly as provider.bedrock.service carries it for bedrock-runtime. The service string is taken from the AWS SDK client distribution name rather than from boto3's own documentation.
