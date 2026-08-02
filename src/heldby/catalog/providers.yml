@@ -782,3 +782,77 @@ rules:
       url_literal: ["bedrock-agent-runtime"]
     note: >
       The Python shape of the same thing: boto3.client("bedrock-agent-runtime"), where the service string is the only tell separating an agent invocation from any other AWS call, exactly as provider.bedrock.service carries it for bedrock-runtime. The service string is taken from the AWS SDK client distribution name rather than from boto3's own documentation.
+
+  - id: langchain.classic.js
+    kind: model
+    imports:
+      ts: ["@langchain/classic"]
+    registry:
+      npm: ["@langchain/classic"]
+    match:
+      symbol: ["LLMChain", "ConversationalRetrievalQAChain", "RetrievalQAChain", "StuffDocumentsChain", "MapReduceDocumentsChain", "RefineDocumentsChain"]
+    note: >
+      The TypeScript counterpart of the already-catalogued langchain-classic distribution, which npm describes as "Old abstractions from LangChain.js". It matters because @langchain/community on npm now carries a deprecation, and the legacy surface moved here, so a repo part-way through the LangChain.js 1.x migration imports a specifier no existing rule lists. Added as a new rule rather than a ts key on langchain.classic so that rule's match is untouched. The classes are imported from the @langchain/classic/chains subpath, which the bare specifier covers by prefix; only LLMChain and ConversationalRetrievalQAChain appeared in import lines in the package's README, the other three were named in its prose.
+  - id: langchain.create-agent
+    kind: model
+    imports:
+      py: ["langchain"]
+      ts: ["langchain"]
+    registry:
+      npm: ["langchain"]
+      pypi: ["langchain"]
+    match:
+      symbol: ["createAgent"]
+    note: >
+      LangChain 1.x's agent entry point, which no existing rule carries: langchain.chat.models lists the `langchain` package but only Chat<Vendor> classes, and langgraph.graph lists create_react_agent, a different name. A repo built on createAgent therefore has no catalogued symbol anywhere, and the agent is driven afterwards by a generic .invoke(), covered only by the deliberately over-approximate langchain.invoke. One entry spans the TypeScript createAgent and the Python create_agent because identifiers are matched case-folded with separators stripped. Only the TypeScript form was read from a package README; the Python module path was not.
+  - id: cerebras.chat.js
+    kind: model
+    imports:
+      ts: ["@cerebras/cerebras_cloud_sdk"]
+    registry:
+      npm: ["@cerebras/cerebras_cloud_sdk"]
+    match:
+      construct: true
+      symbol: ["Cerebras"]
+    note: >
+      The npm counterpart that the cerebras.chat note names explicitly as not covered; npm describes it as "The official TypeScript library for the Cerebras API". The distribution carries an underscore inside a scope (@cerebras/cerebras_cloud_sdk) where PyPI uses hyphens (cerebras-cloud-sdk), so neither name follows from the other. Matches construction because the call chain is chat.completions.create, indistinguishable from an OpenAI call once the client sits in a variable. The class name follows the Python SDK's and was not read from the package's own README.
+  - id: azure.ai-inference.js
+    kind: model
+    imports:
+      ts: ["@azure-rest/ai-inference"]
+    registry:
+      npm: ["@azure-rest/ai-inference"]
+    match:
+      symbol: ["ModelClient"]
+    note: >
+      The npm counterpart that the azure.ai-inference note names explicitly as not covered, for Azure AI Foundry deployments reached through Azure's own client rather than the `openai` package. The README constructs it as `ModelClient(endpoint, credential)` — a default-exported factory called without `new`, so construct is not claimed. The request is then issued through a generic path().post() chain that no member rule could separate from any other Azure REST call. Still on a beta version line, so the export may yet be renamed.
+  - id: livekit.agents
+    kind: model
+    imports:
+      py: ["livekit.agents"]
+    registry:
+      pypi: ["livekit-agents"]
+    match:
+      symbol: ["Agent", "AgentSession", "AgentServer"]
+    note: >
+      Realtime voice agents, a shape with no coverage of any kind in this catalogue: the model runs as a streaming session the framework drives, so there is no request at a call site for a member, host or URL rule to see, and the speech-to-text and text-to-speech stages are model calls too. The import is dotted (livekit.agents) while the distribution is hyphenated. All three symbols were read from the framework's own quickstart import block. Vendor plugins ship as separate livekit-plugins-* distributions and are not covered here, so which model is reached is invisible to this rule.
+  - id: pipecat.pipeline
+    kind: model
+    imports:
+      py: ["pipecat"]
+    registry:
+      pypi: ["pipecat-ai"]
+    match:
+      symbol: ["Pipeline", "PipelineTask", "PipelineRunner"]
+    note: >
+      The other voice-agent framework, described on PyPI as "An open source framework for voice (and multimodal) assistants", and the same blind spot as livekit.agents: models are stages in a streaming pipeline rather than calls at a site. The import is `pipecat` while the distribution is `pipecat-ai`, so neither name follows from the other. The symbol names were NOT read from the package's own README and follow the framework's documented pipeline vocabulary; a repo is otherwise caught by its import. `Pipeline` is a generic word already used by haystack.generator, and is only meaningful scoped to this import.
+  - id: cloudflare.agents-sdk
+    kind: model
+    imports:
+      ts: ["agents"]
+    registry:
+      npm: ["agents"]
+    match:
+      symbol: ["AIChatAgent", "routeAgentRequest", "getAgentByName"]
+    note: >
+      Cloudflare's Agents SDK, published by Cloudflare Inc. under the unscoped npm name `agents` and described as "A home for your AI agents". The catalogue has cloudflare.workers-ai for the env.AI binding but nothing for this, where an agent is a durable object subclass whose model calls happen inside methods rather than at an import-visible site. The unscoped, very generic specifier is the risk in this rule, which is why the bare `Agent` export is deliberately not matched — it would fire on unrelated code. The symbols were NOT read from the package's own README.
