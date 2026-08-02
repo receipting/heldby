@@ -89,3 +89,14 @@ rules:
       url_literal: ["api.smith.langchain.com"]
     note: >
       Observability rather than a proxy, the same shape as the langfuse rule: it does not stand between a model's output and an effect, but it names the traced runs. Matches the host and the package; a repo tracing through LangChain's own callbacks with only an environment variable set leaves no langsmith import and is missed.
+
+  - id: gateway.openrouter.aisdk
+    kind: model
+    imports:
+      ts: ["@openrouter/ai-sdk-provider"]
+    registry:
+      npm: ["@openrouter/ai-sdk-provider"]
+    match:
+      symbol: ["openrouter", "createOpenRouter"]
+    note: >
+      OpenRouter reached as an AI SDK provider package rather than as a base URL. The existing gateway.openrouter rule matches only the host literal, so a repo that names the provider through this package and never writes the URL down is missed — and because OpenRouter fronts many vendors, which model is called is a runtime value. Added as a new rule so gateway.openrouter's match is untouched. The factory symbols follow the AI SDK's provider convention and were NOT read from the package's own README.
