@@ -856,3 +856,72 @@ rules:
       symbol: ["AIChatAgent", "routeAgentRequest", "getAgentByName"]
     note: >
       Cloudflare's Agents SDK, published by Cloudflare Inc. under the unscoped npm name `agents` and described as "A home for your AI agents". The catalogue has cloudflare.workers-ai for the env.AI binding but nothing for this, where an agent is a durable object subclass whose model calls happen inside methods rather than at an import-visible site. The unscoped, very generic specifier is the risk in this rule, which is why the bare `Agent` export is deliberately not matched — it would fire on unrelated code. The symbols were NOT read from the package's own README.
+
+  - id: msagentframework.agent
+    kind: model
+    imports:
+      py: ["agent_framework"]
+    registry:
+      pypi: ["agent-framework", "agent-framework-core"]
+    match:
+      symbol: ["ChatAgent", "OpenAIChatClient", "AzureOpenAIChatClient"]
+    note: >
+      Microsoft's Agent Framework, which the catalogue has no entry for although it carries both autogen.agent and semantic-kernel.kernel. The import is underscored (agent_framework) while the distributions are hyphenated, and the framework ships as a family of agent-framework-* distributions all sharing that one import prefix, so the prefix is what makes the rule cover them. The package page's quickstart shows `from agent_framework import Agent` and `from agent_framework.openai import OpenAIChatClient`; the bare `Agent` export is deliberately not matched because it is too generic a word to carry, and ChatAgent is the class name documented on Microsoft Learn rather than one read from the package page. AzureOpenAIChatClient follows the framework's client naming and was NOT read from either page, so a repo using a client class not listed here is caught by its import but not by symbol.
+  - id: openai.realtime
+    kind: model
+    imports:
+      py: ["openai"]
+      ts: ["openai"]
+    registry:
+      npm: ["openai"]
+      pypi: ["openai"]
+    match:
+      member: ["realtime.connect", "beta.realtime.connect"]
+    model_arg: model
+    note: >
+      A realtime speech-and-text session, a shape none of the openai rules see: the model is driven over a persistent connection rather than by a request at a call site, so a repo whose assistant is entirely realtime matches only the client construction. The package page shows `client.realtime.connect(model="gpt-realtime-2")`, which is where model_arg comes from. beta.realtime.connect is carried alongside it because the API sat under the beta namespace before it moved, and repos on the older SDK line still exist. What happens inside the session — tool calls, audio in and out — is invisible to this rule.
+  - id: llm.http.realtime
+    kind: model
+    match:
+      url_contains: ["/v1/realtime"]
+    note: >
+      The realtime endpoint by path, host-independent, the same shape as the other llm.http.* rules. It matters separately from openai.realtime because a realtime session is often opened with a hand-rolled WebSocket client rather than a vendor SDK, and because Azure and OpenAI-compatible servers serve the same path on their own hosts. A path match cannot tell which model is reached.
+  - id: google.genai.chats
+    kind: model
+    imports:
+      py: ["google.genai"]
+      ts: ["@google/genai"]
+    registry:
+      npm: ["@google/genai"]
+      pypi: ["google-genai"]
+    match:
+      member: ["chats.create", "sendMessage", "sendMessageStream"]
+    model_arg: model
+    note: >
+      The multi-turn chat surface of the Google GenAI SDK, which google.genai and google.genai.stream miss entirely: the package page shows `chat = client.chats.create(model='gemini-3.5-flash')` followed by `chat.send_message(...)`, so a repo that talks to Gemini only through a chat session has no generateContent call anywhere for those rules to find, and the model is named at chats.create rather than at the call. One entry covers send_message and sendMessage because identifiers are matched case-folded with separators stripped. sendMessageStream follows the SDK's streaming convention and was NOT read verbatim from the page; sendMessage is a generic enough member that it is only meaningful scoped to this import.
+  - id: openai.images
+    kind: model
+    imports:
+      py: ["openai"]
+      ts: ["openai"]
+    registry:
+      npm: ["openai"]
+      pypi: ["openai"]
+    match:
+      member: ["images.generate", "images.edit", "images.createVariation"]
+    model_arg: model
+    note: >
+      Image generation and editing off the same openai client the catalogue already covers for chat, responses, embeddings and moderations. A repo whose only model use is image generation currently matches nothing but openai.client.construct, which says nothing about what is being generated. All three member chains are listed in the SDK's own api.md; one entry covers create_variation and createVariation because identifiers are matched case-folded with separators stripped. The model is a keyword argument, but an image model named only in a config table elsewhere is not caught here.
+  - id: openai.audio
+    kind: model
+    imports:
+      py: ["openai"]
+      ts: ["openai"]
+    registry:
+      npm: ["openai"]
+      pypi: ["openai"]
+    match:
+      member: ["audio.transcriptions.create", "audio.translations.create", "audio.speech.create"]
+    model_arg: model
+    note: >
+      Speech-to-text and text-to-speech off the openai client, the other model surface on it with no rule. Transcription is a model reading audio a user supplied, which is an untrusted-input path that a catalogue covering only chat reports as no AI at all. All three member chains are listed in the SDK's own api.md. A streaming transcription session is not covered here, and a realtime voice session is covered by openai.realtime instead.
