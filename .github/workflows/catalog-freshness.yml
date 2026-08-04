@@ -29,15 +29,23 @@ name: catalog-freshness
 # never as instructions. A hostile page's best case is one extra rule for a
 # package that genuinely exists, which still has to survive the fixtures and is
 # visible in the diff forever.
+#
+# The pull request is opened with a repo-scoped token of its own rather than the
+# job's GITHUB_TOKEN, because a pull request opened by GITHUB_TOKEN starts no
+# workflow: GitHub files the ci run as action_required and never dispatches a
+# job. The nightly change then merged with the test suite never having run
+# against it — the one outcome this whole file is arranged to prevent.
 
 on:
   schedule:
     - cron: "17 14 * * *" # 00:17 AEST
   workflow_dispatch:
 
+# Read-only for the job's own token. Everything that writes — the branch, the
+# pull request, the merge — goes through CATALOG_BOT_TOKEN in the last step, so
+# no write-capable credential exists in this job while the model is running.
 permissions:
-  contents: write
-  pull-requests: write
+  contents: read
 
 concurrency:
   group: catalog-freshness
@@ -53,6 +61,9 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          # Leave no credential in .git/config. The discovery step below reads
+          # the open web, and a token on disk is just a file it can read.
+          persist-credentials: false
 
       - uses: astral-sh/setup-uv@v5
         with:
@@ -70,11 +81,12 @@ jobs:
       # 2 · The only step that uses a model. Skipped, loudly, without a key —
       #     a fork inherits this workflow and must not fail because of that.
       #
-      #     Note what the model is NOT given. No Bash: actions/checkout leaves a
-      #     write-capable token in .git/config, so a shell would let a model that
-      #     has just been reading the open web run git push. It does not need one
-      #     — step 1 already wrote the registry results to /tmp for it to read.
-      #     No GITHUB_TOKEN in this step's environment either.
+      #     Note what the model is NOT given. No Bash, so nothing it reads on the
+      #     web can become a command. No token in its environment, and none on
+      #     disk either — the checkout above persists no credential, and the one
+      #     token that can write is introduced two steps later, after this step
+      #     has finished. It needs none of it: step 1 already wrote the registry
+      #     results to /tmp for it to read.
       #     Discovery is allowed to fail. It is the one non-deterministic step, and
       #     the registry check above may already have found a rename worth
       #     shipping — killing the job over a slow model run would throw that away.
@@ -129,10 +141,17 @@ jobs:
           uv run heldby catalog > /dev/null
           uv run pytest -q
 
+      # 5 · The only step holding a credential that can write, and the first one
+      #     to run after the model step has exited.
+      #
+      #     CATALOG_BOT_TOKEN is a fine-grained token scoped to this repository
+      #     alone, with contents:write and pull-requests:write and nothing else.
+      #     No workflows permission on purpose: a run that has been reading the
+      #     open web all night cannot rewrite the gates that judge it.
       - name: Open the pull request
         if: steps.changed.outputs.changed == 'true'
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.CATALOG_BOT_TOKEN }}
           GATE: ${{ steps.gate.outcome }}
           DISCOVERY: ${{ steps.discovery.outcome }}
           RUN_ID: ${{ github.run_id }}
@@ -144,7 +163,10 @@ jobs:
           git checkout -b "$BRANCH"
           git add src/heldby/catalog/
           git commit -m "catalog: nightly freshness sweep"
-          git push -u origin "$BRANCH"
+          # Pushed to a one-off authenticated URL rather than through `origin`,
+          # so the token is never written into .git/config.
+          git push "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
+            "HEAD:refs/heads/${BRANCH}"
 
           # The body is assembled from files on disk, never interpolated into the
           # shell — the summary is model output and is treated as untrusted text.
@@ -179,8 +201,13 @@ jobs:
             --base main
 
           if [ "${GATE}" = "success" ]; then
-            gh pr merge "$BRANCH" --squash
-            echo "Merged: additive, catalogue loads, fixtures pass." >> "$GITHUB_STEP_SUMMARY"
+            # --auto, not a straight merge: main requires the `test` check, and
+            # that check is still queued at this point. Asking to merge now would
+            # be refused. This hands the merge to GitHub, to happen when ci goes
+            # green — and to never happen if it does not.
+            gh pr merge "$BRANCH" --auto --squash
+            echo "Auto-merge armed: additive, catalogue loads, fixtures pass. Merges when ci is green." \
+              >> "$GITHUB_STEP_SUMMARY"
           else
             gh pr edit "$BRANCH" --add-label "needs-review"
             {

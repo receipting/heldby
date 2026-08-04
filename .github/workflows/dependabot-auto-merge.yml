@@ -1,0 +1,19 @@
+name: Dependabot auto-merge
+# Auto-merges Dependabot PRs once the required check (test) passes.
+# pull_request_target is required so the token is writable on
+# Dependabot-triggered runs (a plain pull_request token is read-only for
+# Dependabot). This job never checks out PR code, so the elevated context is safe.
+on: pull_request_target
+permissions:
+  contents: write
+  pull-requests: write
+jobs:
+  auto-merge:
+    if: github.actor == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Enable auto-merge (merges when required checks pass)
+        run: gh pr merge --auto --squash "$PR_URL"
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
