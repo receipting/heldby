@@ -925,3 +925,68 @@ rules:
     model_arg: model
     note: >
       Speech-to-text and text-to-speech off the openai client, the other model surface on it with no rule. Transcription is a model reading audio a user supplied, which is an untrusted-input path that a catalogue covering only chat reports as no AI at all. All three member chains are listed in the SDK's own api.md. A streaming transcription session is not covered here, and a realtime voice session is covered by openai.realtime instead.
+
+  - id: local.lmstudio
+    kind: model
+    imports:
+      py: ["lmstudio"]
+      ts: ["@lmstudio/sdk"]
+    registry:
+      npm: ["@lmstudio/sdk"]
+      pypi: ["lmstudio"]
+    match:
+      member: ["respond", "complete"]
+      symbol: ["llm", "LMStudioClient"]
+    note: >
+      A model served by a local LM Studio instance over a websocket to localhost, the same blind spot local.llama-cpp, local.vllm and local.transformers cover for other runtimes: no API key and no vendor host, so every url_literal and env rule in this catalogue is blind to it. The PyPI page's example is `import lmstudio as lms`, `model = lms.llm()`, `model.complete(...)` and `model.respond(chat)`, which is where llm, complete and respond come from. LMStudioClient is the TypeScript client name and was NOT read from the npm package's README, so a TS repo is caught by its import but may not match by symbol. The distribution names differ by ecosystem — @lmstudio/sdk on npm, lmstudio on PyPI — and both were resolved against their own registry. `complete` and `respond` are generic members, only meaningful scoped to these imports. LM Studio also serves an OpenAI-compatible HTTP endpoint, already covered by llm.http.chat-completions; which model is loaded is a runtime value here.
+  - id: openai.assistants
+    kind: model
+    imports:
+      py: ["openai"]
+      ts: ["openai"]
+    registry:
+      npm: ["openai"]
+      pypi: ["openai"]
+    match:
+      member: ["beta.assistants.create", "beta.threads.runs.create", "beta.threads.createAndRun", "beta.threads.runs.stream"]
+    model_arg: model
+    note: >
+      The Assistants API, a hosted agent loop with tool use including code interpreter and file search. None of the existing openai rules see it: there is no chat.completions.create or responses.create anywhere in a repo built this way, so such a repo matches only openai.client.construct. The model is named at beta.assistants.create rather than at the run, which is why model_arg sits on a rule whose other members do not carry it. All four chains appear in the SDK's own api.md; one entry covers create_and_run and createAndRun because identifiers are matched case-folded with separators stripped. This surface is superseded by responses.create, which openai.responses covers, and is kept because repos on it exist. What the assistant does inside a run — which tools fire, what the code interpreter executes — is invisible to this rule.
+  - id: anthropic.messages.batches
+    kind: model
+    imports:
+      py: ["anthropic"]
+      ts: ["@anthropic-ai/sdk"]
+    registry:
+      npm: ["@anthropic-ai/sdk"]
+      pypi: ["anthropic"]
+    match:
+      member: ["messages.batches.create", "beta.messages.batches.create"]
+    note: >
+      Bulk inference through the Message Batches API. anthropic.messages and anthropic.beta.messages match messages.create and beta.messages.create, and neither fires here, so a repo whose model work is entirely batched matches only the client construction. Both chains appear in the SDK's own api.md; the beta namespace is carried alongside the stable one because repos on the older SDK line still exist. No model_arg is claimed: the model is named per-request inside the `requests` list, not as an argument at the call site, so the vendor is visible but the model is not. The results are read back later through messages.batches.results, which this rule does not match — the site that consumes the model's output can therefore be in a different module from the site this fires on.
+  - id: openai.batches
+    kind: model
+    imports:
+      py: ["openai"]
+      ts: ["openai"]
+    registry:
+      npm: ["openai"]
+      pypi: ["openai"]
+    match:
+      member: ["batches.create"]
+    note: >
+      The OpenAI Batch API, the same shape as anthropic.messages.batches: a batch of model calls submitted as a file, so none of the openai member rules fire and a repo doing only bulk inference matches just openai.client.construct. batches.create is listed in the SDK's own api.md. No model_arg is claimed because the model is named inside each line of the uploaded JSONL, which no scan of the call site can read — this rule proves a model runs and cannot say which one, or how many times. The endpoint being batched is an argument here, so a batch can be chat, embeddings or responses work.
+  - id: elevenlabs.speech
+    kind: model
+    imports:
+      py: ["elevenlabs"]
+      ts: ["@elevenlabs/elevenlabs-js"]
+    registry:
+      npm: ["@elevenlabs/elevenlabs-js"]
+      pypi: ["elevenlabs"]
+    match:
+      member: ["textToSpeech.convert", "textToSpeech.stream"]
+      symbol: ["ElevenLabs", "AsyncElevenLabs"]
+    model_arg: model_id
+    note: >
+      Speech synthesis and voice cloning through the vendor's own SDK. The catalogue reaches ElevenLabs only through @ai-sdk/elevenlabs in aisdk.providers.more, so a repo using the first-party client matches nothing; openai.audio establishes that a speech model is a model call. `from elevenlabs.client import ElevenLabs`, `ElevenLabs()`, `text_to_speech.convert` and `text_to_speech.stream` were read from the PyPI page, and one entry covers text_to_speech and textToSpeech because identifiers are matched case-folded with separators stripped. AsyncElevenLabs is named in the same page's prose. The model is a keyword argument named model_id rather than model, which is why model_arg differs from every other rule here. The npm distribution name was resolved against the registry but its exported symbol was NOT read from its README. The SDK's conversational-agent and speech-to-text surfaces are not covered by these members, so a voice agent built on it is caught by import and client only.
