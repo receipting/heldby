@@ -52,19 +52,30 @@ TS_TEMPLATE = '''\
 //      The entry has to survive an auditor reading the code next to it. If the
 //      honest answer is nothing, leave it empty — the register will say so.
 
-export type AIClass = 'read' | 'decide' | 'converse' | 'write'
+export type AIClass = 'read' | 'decide' | 'converse' | 'send'
 
 /**
+ * Two tiers, and the tier is the question that matters: when this is wrong, does
+ * anyone OUTSIDE the organisation find out?
+ *
+ *   Inform (read, converse) — the output stays inside. Wrong costs you rework.
+ *   Act    (decide, send)   — the output crosses out. Money moves, or words reach
+ *                             someone else. Every control worth having sits here.
+ *
  * Read     — turns a document or message into structured data, checked against
  *            something real. If it cannot be checked against the world, not Read.
- * Decide   — proposes an action with a consequential effect. No person on the fast
- *            path by design; bounded by deterministic gates plus a threshold.
  * Converse — answers the person who asked, them and us and nobody else, and does
  *            nothing. All three closed-loop tests must hold.
- * Write    — produces prose the system carries to someone else. A named person
+ * Decide   — proposes an action with a consequential effect. No person on the fast
+ *            path by design; bounded by deterministic gates plus a threshold.
+ * Send     — carries prose the system puts in front of someone else. A named person
  *            edits and releases it, and the record says who.
  *
- * Where a process spans two, the STRICTER governs: Read < Converse < Decide < Write.
+ * Where a process spans two, the STRICTER governs: Read < Converse < Decide < Send.
+ *
+ * A class and a `reaches` list that disagree is a contradiction, not a nuance: if
+ * you are filing this read or converse while it reaches a protected action, one of
+ * the two is wrong. Resolve it rather than picking the gentler label.
  */
 export type ProtectedAction =
 {actions}
@@ -120,16 +131,27 @@ This file is the source of truth for this repo's AI register. Two rules:
    The entry has to survive an auditor reading the code next to it. If the honest
    answer is nothing, leave it empty — the register will say so.
 
+Two tiers, and the tier is the question that matters: when this is wrong, does
+anyone OUTSIDE the organisation find out?
+
+  Inform (read, converse) — the output stays inside. Wrong costs you rework.
+  Act    (decide, send)   — the output crosses out. Money moves, or words reach
+                            someone else. Every control worth having sits here.
+
 Read     — turns a document or message into structured data, checked against
            something real. If it cannot be checked against the world, not Read.
-Decide   — proposes an action with a consequential effect. No person on the fast
-           path by design; bounded by deterministic gates plus a threshold.
 Converse — answers the person who asked, them and us and nobody else, and does
            nothing. All three closed-loop tests must hold.
-Write    — produces prose the system carries to someone else. A named person
+Decide   — proposes an action with a consequential effect. No person on the fast
+           path by design; bounded by deterministic gates plus a threshold.
+Send     — carries prose the system puts in front of someone else. A named person
            edits and releases it, and the record says who.
 
-Where a process spans two, the STRICTER governs: Read < Converse < Decide < Write.
+Where a process spans two, the STRICTER governs: Read < Converse < Decide < Send.
+
+A class and a ``reaches`` list that disagree is a contradiction, not a nuance: if
+you are filing this read or converse while it reaches a protected action, one of
+the two is wrong. Resolve it rather than picking the gentler label.
 
 AI_PROCESSES must stay a plain dict LITERAL. Tooling reads it with
 ``ast.literal_eval`` rather than importing this module, so that collecting the
@@ -138,7 +160,7 @@ register never needs your runtime dependencies or a database connection.
 
 from typing import Literal
 
-AIClass = Literal["read", "decide", "converse", "write"]
+AIClass = Literal["read", "converse", "decide", "send"]
 
 ProtectedAction = Literal[
 {actions}
@@ -243,7 +265,7 @@ def plan(root: Path, catalog: Catalog) -> AdoptPlan:
 def _ts_entry(name: str) -> str:
     return (
         f"  {name!r}: {{\n"
-        f"    class: 'read',        // CHECK THIS. Read < Converse < Decide < Write.\n"
+        f"    class: 'read',        // CHECK THIS. Read < Converse < Decide < Send.\n"
         f"    model: '',            // the model this call site pins\n"
         f"    does: '',             // one line, for the register a customer reads\n"
         f"    reaches: [],          // what it can reach when it is wrong\n"
@@ -255,7 +277,7 @@ def _ts_entry(name: str) -> str:
 def _py_entry(name: str) -> str:
     return (
         f'    "{name}": {{\n'
-        f'        "class": "read",   # CHECK THIS. Read < Converse < Decide < Write.\n'
+        f'        "class": "read",   # CHECK THIS. Read < Converse < Decide < Send.\n'
         f'        "model": "",       # the model this call site pins\n'
         f'        "does": "",        # one line, for the register a customer reads\n'
         f'        "reaches": [],     # what it can reach when it is wrong\n'

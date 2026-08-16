@@ -42,13 +42,53 @@ GOOD = Process(
 )
 GAP = Process(
     name="blast",
-    ai_class="write",
+    ai_class="send",
     model="claude-sonnet-4-6",
     repo="ts-messy",
     does="Sends model prose to a third party.",
     held_by="",
     reaches=["external-comms"],
 )
+
+
+def test_the_tier_is_derived_from_the_class_and_fails_closed():
+    """Inform and Act are not a fifth thing to classify — they fall out of the class.
+
+    An unrecognised class reads as Act, because the failure that matters is a
+    process that crosses being treated as one that does not.
+    """
+    assert GOOD.tier == "inform"
+    assert GAP.tier == "act"
+    assert Process(
+        name="x", ai_class="freestyle", model="m", repo="r", does="d", held_by="h"
+    ).tier == "act"
+
+
+def test_a_class_that_disagrees_with_its_reach_is_a_contradiction(scans):
+    """Class and reach used to be two independent assertions with nothing forcing
+    them to agree, so a process could be filed Read while sitting on a call that
+    moves money and no part of the register would object.
+
+    This is the check that catches the real misfiling — cheapest label, protected
+    action underneath — and it is arithmetic rather than a judgement call.
+    """
+    misfiled = Process(
+        name="bank-routing",
+        ai_class="read",
+        model="m",
+        repo="r",
+        does="Picks which account a row belongs to.",
+        held_by="Chooses only from accounts already on file.",
+        reaches=["move-money"],
+    )
+    assert misfiled.contradicts_tier
+    assert not GOOD.contradicts_tier, "reaches nothing, so nothing to contradict"
+    assert not GAP.contradicts_tier, "Act-tier and it reaches — that agrees"
+
+    md = render_markdown(_register([misfiled]), scans)
+    assert "bank-routing" in md
+    assert "move-money" in md
+    assert "filed as staying inside" in md
 
 
 def test_a_gap_is_rendered_as_nothing_in_bold(scans):
@@ -124,15 +164,15 @@ def test_excluded_scope_is_aggregated_once_not_per_component(scans):
 
 
 def test_the_stricter_class_governs_the_ordering(scans):
-    """Read < Converse < Decide < Write, so the table builds toward the rows that
+    """Read < Converse < Decide < Send, so the table builds toward the rows that
     carry the most consequence rather than sorting alphabetically."""
     processes = [
-        Process(name="w", ai_class="write", model="m", repo="r", does="d", held_by="h"),
+        Process(name="s", ai_class="send", model="m", repo="r", does="d", held_by="h"),
         Process(name="r", ai_class="read", model="m", repo="r", does="d", held_by="h"),
         Process(name="d", ai_class="decide", model="m", repo="r", does="d", held_by="h"),
     ]
     order = [p.name for p in _register(processes).sorted_processes()]
-    assert order == ["r", "d", "w"]
+    assert order == ["r", "d", "s"]
 
 
 def test_provenance_pins_the_detection_surface(scans):

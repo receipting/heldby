@@ -24,14 +24,14 @@ from datetime import date
 
 from .scan import ScanReport
 
-CLASS_ORDER = ["read", "converse", "decide", "write"]
-CLASS_LABEL = {"read": "Read", "converse": "Converse", "decide": "Decide", "write": "Write"}
+CLASS_ORDER = ["read", "converse", "decide", "send"]
+CLASS_LABEL = {"read": "Read", "converse": "Converse", "decide": "Decide", "send": "Send"}
 
 CLASS_LINE = {
     "read": "turns documents or messages into data. The output gets checked against something real.",
     "converse": "answers the person who asked. It reaches nobody else and does nothing.",
     "decide": "acts with no person on the fast path, inside deterministic bounds and a threshold.",
-    "write": "produces prose the system carries to someone else. A named person releases it.",
+    "send": "carries prose out to someone else. A named person releases it.",
 }
 
 CLASS_RULE = {
@@ -43,8 +43,30 @@ CLASS_RULE = {
     "outside the threshold goes to a queue a person works.",
     "converse": "Answers the person who asked — them and us, nobody else. No separate review, "
     "because the person who asked is the person who judges the answer, as they read it.",
-    "write": "Produces prose the system will carry to someone else. A named person edits and "
-    "releases it, and the record says who. Nothing AI-written leaves unattended.",
+    "send": "Carries prose the system will put in front of someone else. A named person edits "
+    "and releases it, and the record says who. Nothing AI-written leaves unattended.",
+}
+
+#: The tier a class belongs to. Two tiers, because the thing that decides how much
+#: a mistake costs is not what the model does — it is whether the output crosses
+#: out of the organisation. Read and Converse stay inside; Decide and Send cross.
+#:
+#: This is the older split rediscovered: Parasuraman, Sheridan & Wickens (2000)
+#: separate the *information* stages of automation (acquisition, analysis) from the
+#: *action* stages (decision selection, action implementation), and put the risk in
+#: the second pair. The Model Context Protocol reaches for the same line when it
+#: marks a tool `openWorldHint` — "does the tool interact with an open world of
+#: external entities, or is its domain closed?" — and makes that flag, not the
+#: model, decide whether a host stops to ask permission.
+CLASS_TIER = {"read": "inform", "converse": "inform", "decide": "act", "send": "act"}
+
+TIER_ORDER = ["inform", "act"]
+TIER_LABEL = {"inform": "Inform", "act": "Act"}
+
+TIER_LINE = {
+    "inform": "the output stays inside. Wrong costs you rework, and nobody outside ever knows.",
+    "act": "the output crosses out — money moves, or words reach someone else. "
+    "Every control worth having sits here.",
 }
 
 
@@ -79,6 +101,28 @@ class Process:
     @property
     def has_control(self) -> bool:
         return bool(self.held_by.strip())
+
+    @property
+    def tier(self) -> str:
+        """`inform` or `act`. Unknown classes read as `act` — fail closed."""
+        return CLASS_TIER.get(self.ai_class, "act")
+
+    @property
+    def contradicts_tier(self) -> bool:
+        """Filed as staying inside, yet it reaches something outside.
+
+        Class and reach used to be two independent assertions with nothing forcing
+        them to agree, so a process could be filed Read while sitting on a call
+        that moves money and no part of the register would object. The tier is what
+        makes them checkable against each other: a Read that reaches `move-money`
+        is not a judgement call anyone needs to relitigate, it is a contradiction
+        in the row itself.
+
+        Not an error here — this module never overrules a classification, it
+        reports. But an unresolved contradiction is a finding, and it belongs in
+        front of the reader rather than in a footnote.
+        """
+        return self.tier == "inform" and bool(self.reaches)
 
     @property
     def cell(self) -> str:
@@ -271,13 +315,23 @@ def render_markdown(register: Register, scans: dict[str, ScanReport]) -> str:
         )
         out.append("")
 
-    out.append("There are four ways a repo can use AI:")
+    out.append(
+        "Ask one question first: **when this is wrong, does anyone outside the "
+        "organisation find out?**"
+    )
+    out.append("")
+    for key in TIER_ORDER:
+        out.append(f"- **{TIER_LABEL[key]}** — {TIER_LINE[key]}")
+    out.append("")
+    out.append("Each tier splits in two, by what the model is doing:")
     out.append("")
     for key in CLASS_ORDER:
-        out.append(f"- **{CLASS_LABEL[key]}** — {CLASS_LINE[key]}")
+        out.append(
+            f"- **{CLASS_LABEL[key]}** ({TIER_LABEL[CLASS_TIER[key]]}) — {CLASS_LINE[key]}"
+        )
     out.append("")
     out.append(
-        "Risk rises left to right: Read < Converse < Decide < Write. A process spanning two "
+        "Risk rises left to right: Read < Converse < Decide < Send. A process spanning two "
         "classes gets the stricter one. This report puts every AI call in this repo into one "
         "of the four."
     )
@@ -308,6 +362,20 @@ def render_markdown(register: Register, scans: dict[str, ScanReport]) -> str:
     gaps = [p for p in processes if not p.has_control]
     if gaps:
         out.append(f"**{len(gaps)} process(es) have nothing holding them.** The gap is the finding.")
+        out.append("")
+    crossed = [p for p in processes if p.contradicts_tier]
+    if crossed:
+        out.append(
+            f"**{len(crossed)} process(es) are filed as staying inside the organisation "
+            "while reaching something outside it.** Either the class is wrong or the "
+            "`reaches` list is, and which one it is changes what has to be built:"
+        )
+        out.append("")
+        for p in crossed:
+            out.append(
+                f"- `{p.name}` — filed **{CLASS_LABEL.get(p.ai_class, p.ai_class)}** "
+                f"({TIER_LABEL[p.tier]}), reaches {', '.join(f'`{r}`' for r in p.reaches)}"
+            )
         out.append("")
 
     if register.key_findings:
@@ -422,6 +490,8 @@ def render_json(register: Register, scans: dict[str, ScanReport]) -> dict:
             {
                 "name": p.name,
                 "class": p.ai_class,
+                "tier": p.tier,
+                "contradicts_tier": p.contradicts_tier,
                 "model": p.model,
                 "component": p.repo,
                 "does": p.does,
@@ -442,7 +512,11 @@ def render_json(register: Register, scans: dict[str, ScanReport]) -> dict:
             "by_class": {
                 key: sum(1 for p in register.processes if p.ai_class == key) for key in CLASS_ORDER
             },
+            "by_tier": {
+                key: sum(1 for p in register.processes if p.tier == key) for key in TIER_ORDER
+            },
             "without_control": sum(1 for p in register.processes if not p.has_control),
+            "contradicting_tier": sum(1 for p in register.processes if p.contradicts_tier),
         },
         "protected_actions": register.protected_actions,
         "excluded": register.excluded,

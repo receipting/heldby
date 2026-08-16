@@ -1,6 +1,6 @@
 ---
 name: heldby
-description: Audit a codebase for every place AI runs, classify each use as Read/Decide/Converse/Write, and name what stands between each model's output and a real-world effect. Produces an AI register for an auditor, a vendor questionnaire, or a trust-centre page. Use when asked to inventory AI usage, build an AI register, assess AI risk or governance, answer "where does AI run in this system", or prepare an AI disclosure.
+description: Audit a codebase for every place AI runs, classify each use as Read/Converse/Decide/Send, and name what stands between each model's output and a real-world effect. Produces an AI register for an auditor, a vendor questionnaire, or a trust-centre page. Use when asked to inventory AI usage, build an AI register, assess AI risk or governance, answer "where does AI run in this system", or prepare an AI disclosure.
 when_to_use: Point it at any repository — TypeScript/JavaScript and Python are fully supported. Also use it to check an existing AI register is still complete.
 allowed-tools: Bash(uv run --directory ${CLAUDE_SKILL_DIR}/../.. heldby *), Read, Grep, Glob
 ---

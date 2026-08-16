@@ -204,11 +204,22 @@ def render_packets(packets: list[Packet], report: ScanReport) -> str:
         "it is the evidence for someone else to answer two questions per site:"
     )
     out.append("")
-    out.append("1. Which class is this — Read, Decide, Converse or Write?")
-    out.append("2. **What stands between this model's output and a real-world effect?**")
+    out.append(
+        "1. **Does the output cross out of the organisation?** Read and Converse stay "
+        "inside (Inform); Decide and Send cross (Act). Answer this first — it is the "
+        "answer that decides how much the rest matters."
+    )
+    out.append("2. Which class is this — Read, Converse, Decide or Send?")
+    out.append("3. **What stands between this model's output and a real-world effect?**")
     out.append("")
     out.append(
-        "For question 2, name a specific mechanism a reader could go and check. If the honest "
+        "Answers 1 and 2 have to agree. A site you want to file Read or Converse while it "
+        "sits on a path to money or to a third party is a contradiction, not a nuance — "
+        "resolve it rather than picking the gentler label."
+    )
+    out.append("")
+    out.append(
+        "For question 3, name a specific mechanism a reader could go and check. If the honest "
         "answer is nothing, write nothing — that is the most useful row a register can carry."
     )
     out.append("")
