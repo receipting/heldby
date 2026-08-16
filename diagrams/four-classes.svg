@@ -1,5 +1,5 @@
 <svg viewBox="0 0 1180 400" xmlns="http://www.w3.org/2000/svg" role="img"
-           aria-label="Four classes of AI use: Read, Decide, Converse, Write — each with what stands between the model output and the real world"><rect width="1180" height="400" fill="#ffffff"/>
+           aria-label="Four classes of AI use: Read, Converse, Decide, Send — each with what stands between the model output and the real world"><rect width="1180" height="400" fill="#ffffff"/>
         <defs>
           <marker id="a1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
             <path d="M0,0 L10,5 L0,10 z" fill="#a7adbf"/>
@@ -61,7 +61,7 @@
 
           <!-- ============ ROW 4 · WRITE ============ -->
           <rect x="16" y="306" width="250" height="72" rx="10" fill="#F3EEFB" stroke="#6B46C1" stroke-width="1.5"/>
-          <text class="cn" x="36" y="338" fill="#6B46C1">Write</text>
+          <text class="cn" x="36" y="338" fill="#6B46C1">Send</text>
           <text class="cd" x="36" y="359">prose the system carries onward</text>
           <line class="edge" x1="268" y1="342" x2="300" y2="342" marker-end="url(#a1)"/>
           <rect x="304" y="306" width="560" height="72" rx="10" fill="#ffffff" stroke="#cdb9ee" stroke-width="1.5"/>

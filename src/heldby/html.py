@@ -27,6 +27,10 @@ from .render import (
     CLASS_LABEL,
     CLASS_LINE,
     CLASS_ORDER,
+    CLASS_TIER,
+    TIER_LABEL,
+    TIER_LINE,
+    TIER_ORDER,
     Register,
     _aggregate_limits,
     _completeness,
@@ -132,11 +136,17 @@ def render_html(register: Register, scans: dict[str, ScanReport]) -> str:
             f"{len(register.processes)} rows are unreviewed, marked †. Reviewing a row "
             "removes the mark; rewording it doesn't.</div>")
 
-    add("<p>There are four ways a repo can use AI:</p><ul class=\"classes\">")
-    for key in CLASS_ORDER:
-        add(f"<li><strong>{CLASS_LABEL[key]}</strong> — {CLASS_LINE[key]}</li>")
+    add("<p>Ask one question first: <strong>when this is wrong, does anyone outside "
+        "the organisation find out?</strong></p><ul class=\"classes\">")
+    for key in TIER_ORDER:
+        add(f"<li><strong>{TIER_LABEL[key]}</strong> — {TIER_LINE[key]}</li>")
     add("</ul>")
-    add('<p class="lede">Risk rises left to right: Read &lt; Converse &lt; Decide &lt; Write. '
+    add("<p>Each tier splits in two, by what the model is doing:</p><ul class=\"classes\">")
+    for key in CLASS_ORDER:
+        add(f"<li><strong>{CLASS_LABEL[key]}</strong> ({TIER_LABEL[CLASS_TIER[key]]}) "
+            f"— {CLASS_LINE[key]}</li>")
+    add("</ul>")
+    add('<p class="lede">Risk rises left to right: Read &lt; Converse &lt; Decide &lt; Send. '
         "A process spanning two classes gets the stricter one.</p>")
 
     if register.summary.strip():
@@ -157,6 +167,18 @@ def render_html(register: Register, scans: dict[str, ScanReport]) -> str:
     if gaps:
         add(f'<p><span class="gap">{len(gaps)} process(es) have nothing holding them.</span> '
             "The gap is the finding.</p>")
+    crossed = [p for p in processes if p.contradicts_tier]
+    if crossed:
+        add(f'<p><span class="gap">{len(crossed)} process(es) are filed as staying inside '
+            "the organisation while reaching something outside it.</span> Either the class "
+            "is wrong or the reach list is, and which one it is changes what has to be "
+            "built:</p><ul>")
+        for p in crossed:
+            reaches = ", ".join(f"<code>{html_mod.escape(r)}</code>" for r in p.reaches)
+            add(f"<li><code>{html_mod.escape(p.name)}</code> — filed "
+                f"<strong>{CLASS_LABEL.get(p.ai_class, p.ai_class)}</strong> "
+                f"({TIER_LABEL[p.tier]}), reaches {reaches}</li>")
+        add("</ul>")
 
     if register.key_findings:
         add("<h2>Worth knowing</h2><ol>")

@@ -12,9 +12,16 @@ a genuine attempt to kill it is worth ten that were never challenged.
 
 ### 1 · Anything Read or Converse near a protected action is misclassified until proven otherwise
 
-Read and Converse are the low-consequence classes, which makes them where errors
-accumulate — in both directions, honestly: from wishful thinking, and from a
-scanner that could not see the path.
+Read and Converse are the Inform tier — the classes that claim nothing leaves the
+organisation. That makes them where errors accumulate, in both directions honestly:
+from wishful thinking, and from a scanner that could not see the path.
+
+**Part of this check is now arithmetic rather than judgement.** A row filed Read or
+Converse whose `reaches` list is non-empty is a contradiction on its face, and
+`heldby register` reports it above the table without anyone having to notice. Use
+that as the floor, not the ceiling: it catches rows that *declared* a reach and kept
+the gentle label. It cannot catch the row that under-declared its reach, which is
+what the questions below are for.
 
 For every process you classified Read or Converse, ask:
 
@@ -56,7 +63,7 @@ not choose is **not**.
   quiet one. Nothing was sent, no money moved, and yet the model's prose is now
   durable state shaping future decisions with nobody in the loop.
 
-Fail any one and it is **Write**.
+Fail any one and it is **Send**.
 
 ## Clear the false positives the sweep is known to produce
 

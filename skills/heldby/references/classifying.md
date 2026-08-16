@@ -4,17 +4,53 @@ Read this before classifying. The classes are defined by **the gate, not the
 technology**: two call sites using the same model on the same document belong to
 different classes if what they can reach differs.
 
+## Ask the tier first
+
+**When this call site is wrong, does anyone outside the organisation find out?**
+
+| Tier | Classes | What it means |
+|---|---|---|
+| **Inform** | Read, Converse | The output stays inside. Wrong costs rework, and nobody outside ever knows. |
+| **Act** | Decide, Send | The output crosses out — money moves, or words reach someone else. Every control worth having sits here. |
+
+Answer this before picking a class, because it decides how much the rest matters. A
+model drafting emails nobody sends is free; the same model drafting emails that go
+is the whole exposure. Same model, same error rate — the difference is only whether
+anything crosses.
+
+**The tier is derived, never declared.** It falls out of the class you pick, which is
+what makes the two checkable against each other. You never write a tier into a
+register row — you write a class and a `reaches` list, and they have to agree.
+
 ## The four classes
 
-| Class | What the model does | The rule |
-|---|---|---|
-| **Read** | Turns a document or message into structured data | No person required — but the output must be checkable against something real: a column that exists in the file, an account already on file, a total that reconciles. **If it cannot be checked against the world, it is not Read.** |
-| **Decide** | Proposes an action with a consequential real-world effect | No person on the fast path *by design*. Bounded by deterministic gates plus a configured threshold; everything outside the threshold goes to a queue a person works. |
-| **Converse** | Answers the person who asked — them and the operator, nobody else | No separate review, because the person who asked is the person who judges the answer, as they read it. Only valid if the loop is genuinely closed — three tests below. |
-| **Write** | Produces prose the system will carry to someone else | A named person edits and releases it, and the record says who. Nothing AI-written leaves unattended. |
+| Class | Tier | What the model does | The rule |
+|---|---|---|---|
+| **Read** | Inform | Turns a document or message into structured data | No person required — but the output must be checkable against something real: a column that exists in the file, an account already on file, a total that reconciles. **If it cannot be checked against the world, it is not Read.** |
+| **Converse** | Inform | Answers the person who asked — them and the operator, nobody else | No separate review, because the person who asked is the person who judges the answer, as they read it. Only valid if the loop is genuinely closed — three tests below. |
+| **Decide** | Act | Proposes an action with a consequential real-world effect | No person on the fast path *by design*. Bounded by deterministic gates plus a configured threshold; everything outside the threshold goes to a queue a person works. |
+| **Send** | Act | Carries prose the system will put in front of someone else | A named person edits and releases it, and the record says who. Nothing AI-written leaves unattended. |
 
 **Where a process spans two classes, the stricter class governs.** Strictness
-order: **Read < Converse < Decide < Write**.
+order: **Read < Converse < Decide < Send**.
+
+The two Act classes want different gates, and the asymmetry is deliberate: **money
+gets deterministic code and a threshold; words get a named person.** A threshold
+cannot judge whether prose is embarrassing, and a person cannot review ten thousand
+allocations a day. Applying either gate to the other class produces a control that
+looks thorough and holds nothing.
+
+### The class and the reach have to agree
+
+A row filed **Read** or **Converse** that reaches a protected action is a
+**contradiction**, not a nuance. Either the class is wrong or the `reaches` list is,
+and which one changes what has to be built. `heldby register` computes this and puts
+it above the table.
+
+This is the misfiling that actually happens in the wild. Nobody over-classifies a
+chatbot; what they do is leave the cheapest label on a process that has a protected
+action underneath it — usually because the label was accurate when it was written
+and something downstream grew.
 
 ### Why four and not two
 
@@ -36,7 +72,7 @@ consumed by another agent or another process rather than by a person.
 
 It is not **Read**: the rule says the output must be checkable against something real, and
 a judgement has no referent to reconcile against. It is not **Decide**: it proposes no
-action. It is not **Converse**: nobody asked. It is not **Write**: no prose is carried to a
+action. It is not **Converse**: nobody asked. It is not **Send**: no prose is carried to a
 third party.
 
 **The rule: an intermediate output inherits the class of what it feeds**, unless it is
@@ -96,12 +132,12 @@ it" is the easiest way to dodge review. **All three must hold:**
 3. **It does nothing.** No payment, no send, no write to a system of record, **no
    row another process later acts on.**
 
-The line between Converse and Write is **who carries the output onward**. If a
+The line between Converse and Send is **who carries the output onward**. If a
 person carries it, they reviewed it by definition — reading it *is* the review. If
 the system carries it, stores it to serve later, or routes it to a third party,
-that is Write.
+that is Send.
 
-**Fail any one test and it is Write.** A class you can file into to dodge review is
+**Fail any one test and it is Send.** A class you can file into to dodge review is
 worse than no class at all.
 
 ### Test 3 is the one that catches people
@@ -109,7 +145,7 @@ worse than no class at all.
 Watch for the model's own output being persisted and then fed back into a later
 prompt. A memory or reflection loop looks harmless — nothing was sent anywhere, no
 money moved — but the model's prose is now durable state shaping future decisions
-with no person in the loop. That is a row another process acts on. It is Write.
+with no person in the loop. That is a row another process acts on. It is Send.
 
 Real example: an agent writes its decision to an append-only log; a later run reads
 resolved entries back into its prompt as "past lessons". Nobody would self-report

@@ -10,8 +10,8 @@ questionnaire, or publish as a trust-centre page.
 |----------------|----------|--------------------------------------------------|
 | matching       | Decide   | sign gate; totals recomputed; threshold else human|
 | support-chat   | Converse | closed loop; no tool use at all                   |
-| closing-draft  | Write    | a named person picks recipients and clicks Send   |
-| report-writer  | Write    | **nothing**                                       |
+| closing-draft  | Send     | a named person picks recipients and clicks Send   |
+| report-writer  | Send     | **nothing**                                       |
 ```
 
 That last row is the one worth having. A register that can't record a gap is a brochure.
@@ -55,21 +55,60 @@ see. `--json` to pipe it somewhere.
 
 ---
 
+## Ask one question first
+
+**When this is wrong, does anyone outside the organisation find out?**
+
+| Tier | |
+|---|---|
+| **Inform** | The output stays inside. Wrong costs you rework, and nobody outside ever knows. |
+| **Act** | The output crosses out — money moves, or words reach someone else. Every control worth having sits here. |
+
+That is the framework in one line. A model drafting emails nobody sends is free;
+the same model drafting emails that go is your entire exposure. Same model, same
+error rate — the difference is whether anything crosses.
+
+The split is older than the technology. Parasuraman, Sheridan and Wickens
+[separated the *information* stages of automation from the *action* stages in
+2000](https://dl.acm.org/doi/10.1109/3468.844354) and put the risk in the second
+pair. The Model Context Protocol draws the same line when it marks a tool
+[`openWorldHint`](https://blog.modelcontextprotocol.io/posts/2026-03-16-tool-annotations/)
+— *"does the tool interact with an open world of external entities, or is its
+domain closed?"* — and makes that flag, not the model, decide whether the host
+stops to ask permission.
+
 ## The four classes
 
-| Class | The rule |
-|---|---|
-| **Read** | Turns a document or message into structured data. No person required — but the output must be checkable against something real: a column that exists in the file, an account already on file, a total that reconciles. If it can't be checked against the world, it isn't Read. |
-| **Converse** | Answers the person who asked — them and you, nobody else. No separate review, because the person who asked is the person who judges the answer as they read it. |
-| **Decide** | Acts with a consequential real-world effect and no person on the fast path, *by design*. Bounded by deterministic gates plus a configured threshold; everything outside the threshold goes to a queue a person works. |
-| **Write** | Produces prose the system carries to someone else. A named person edits and releases it, and the record says who. |
+Each tier splits in two, by what the model is doing:
 
-Risk rises left to right: **Read < Converse < Decide < Write**. A process spanning two
+| Class | Tier | The rule |
+|---|---|---|
+| **Read** | Inform | Turns a document or message into structured data. No person required — but the output must be checkable against something real: a column that exists in the file, an account already on file, a total that reconciles. If it can't be checked against the world, it isn't Read. |
+| **Converse** | Inform | Answers the person who asked — them and you, nobody else. No separate review, because the person who asked is the person who judges the answer as they read it. |
+| **Decide** | Act | Acts with a consequential real-world effect and no person on the fast path, *by design*. Bounded by deterministic gates plus a configured threshold; everything outside the threshold goes to a queue a person works. |
+| **Send** | Act | Carries prose the system puts in front of someone else. A named person edits and releases it, and the record says who. |
+
+Risk rises left to right: **Read < Converse < Decide < Send**. A process spanning two
 classes gets the stricter one.
 
+The two Act classes want different gates, and that is the rule worth remembering:
+**money gets deterministic code and a threshold; words get a named person.**
+
 <p align="center">
-  <img src="diagrams/four-classes.svg" alt="Four classes of AI use — Read, Decide, Converse, Write — each with what stands between the model output and the real world" width="100%">
+  <img src="diagrams/four-classes.svg" alt="Four classes of AI use — Read, Converse, Decide, Send — each with what stands between the model output and the real world" width="100%">
 </p>
+
+### Class and reach have to agree
+
+The tier is derived, not declared — it falls out of the class, and the class is then
+checkable against what the process `reaches`. A row filed **Read** or **Converse**
+while reaching a protected action is a **contradiction**: either the class is wrong
+or the reach list is, and the register says so above the table rather than in a
+footnote.
+
+That check catches the misfiling that actually happens. The failure is never
+"someone classified a chatbot too harshly" — it is a process wearing the cheapest
+label with a protected action underneath it.
 
 ### Why four and not two
 
@@ -93,7 +132,7 @@ easiest way to dodge review. All three must hold:
 3. **It does nothing.** No payment, no send, no write to a system of record, no row another
    process later acts on.
 
-Fail one and it's Write. The third test is where real systems fail: watch for model output
+Fail one and it's Send. The third test is where real systems fail: watch for model output
 persisted and fed back into a later prompt. Nothing was sent, no money moved, and the
 model's prose is now durable state shaping future decisions with nobody in the loop.
 
