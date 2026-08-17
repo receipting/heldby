@@ -216,6 +216,26 @@ def test_nested_branch_checkouts_are_skipped_but_reported(cat, tmp_path):
     assert any("nested checkout" in limit for limit in report.limits)
 
 
+def test_a_repo_living_under_a_skipped_directory_name_is_still_scanned(cat, tmp_path):
+    """The skip is about what's inside the root, never about where the root sits.
+
+    Found for real in this repo: the check tested the ABSOLUTE path, so a checkout
+    under `<repo>/.claude/worktrees/<name>/` — the default layout for a Claude Code
+    session — matched on its own location and every file was skipped. The run then
+    reported "no AI detected" over a repo it had never opened, which is the worst
+    failure this tool has: silent, confident, and wrong.
+    """
+    import shutil
+
+    root = tmp_path / ".claude" / "worktrees" / "session" / "checkout"
+    shutil.copytree(FIXTURES / "ts-messy", root)
+
+    report = scan(root, cat)
+    assert "gateway.cloudflare-ai" in rules_of(report)
+    assert report.files_scanned == scan(FIXTURES / "ts-messy", cat).files_scanned
+    assert not report.files_skipped.get("nested-checkouts")
+
+
 def test_scan_is_deterministic(cat):
     """Two runs, byte-identical. A report that drifts cannot be diffed in CI."""
     first = scan(FIXTURES / "ts-messy", cat).as_dict()

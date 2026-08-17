@@ -541,9 +541,19 @@ def scan(
     file_imports: dict[str, set[str]] = {}
 
     for path in sorted(root.rglob("*")):
-        if not path.is_file() or any(part in SKIP_DIRS for part in path.parts):
+        if not path.is_file():
             continue
-        if any(part in NESTED_CHECKOUT_DIRS for part in path.parts):
+        # Both skip sets name directories INSIDE the target. Judge them on the path
+        # relative to the root, never the absolute one: a repo checked out beneath a
+        # directory that happens to be named `.claude`, `build` or `vendor` otherwise
+        # matches on its own location and the scan silently reads nothing. That is the
+        # default layout for a Claude Code session, which puts each worktree under
+        # <repo>/.claude/worktrees/<name>/ — every file skipped, "no AI detected"
+        # reported over a repo that was never opened.
+        rel_path = path.relative_to(root)
+        if any(part in SKIP_DIRS for part in rel_path.parts):
+            continue
+        if any(part in NESTED_CHECKOUT_DIRS for part in rel_path.parts):
             if path.suffix.lower() in TS_EXT | PY_EXT:
                 skipped["nested-checkouts"] = skipped.get("nested-checkouts", 0) + 1
             continue
@@ -571,7 +581,7 @@ def scan(
             skipped["unreadable"] = skipped.get("unreadable", 0) + 1
             continue
 
-        rel = str(path.relative_to(root))
+        rel = str(rel_path)
         if not include_tests and TEST_PATH_RE.search(rel):
             skipped["tests"] = skipped.get("tests", 0) + 1
             continue
