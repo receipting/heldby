@@ -16,6 +16,16 @@ version: sinks.v1
 # come from the classify pass reading the code. A register that only contains what
 # a scanner can pattern-match is not a register of the AI in a system; it is a
 # register of the AI a scanner recognises.
+#
+# `alter-recipients` splits down the middle, and the split is worth knowing before
+# adding to it. Changing an AUDIENCE has its own verbs (`addListMember`,
+# `conversations.invite`), and three rules below catch them. Choosing the `to:` of
+# a single send does not: `sendMail({to: picked})` and `sendMail({to: 'ops@corp'})`
+# are the same line to a matcher that reads names and not values, and the line is
+# already reported by `comms.email.sdk`. A rule for it would fire on every send and
+# say nothing. Telling those two apart needs the value, so it needs a real
+# expression parse or a person reading the code — which is the classify pass. Ask
+# there whether the address is model-chosen.
 
 rules:
   # --- execute code ---------------------------------------------------------
@@ -223,6 +233,90 @@ rules:
     note: >
       Gmail send only. Creating a draft is deliberately NOT a send — a draft a
       person still has to click is the human release the register wants to credit.
+
+  # --- change who receives -------------------------------------------------
+  - id: recipients.audience.sdk
+    action: alter-recipients
+    kind: io
+    severity: high
+    trifecta_role: external-comms
+    remedies: [closed-list, human-release]
+    imports:
+      ts: ["@mailchimp/mailchimp_marketing", "@slack/web-api", "discord.js", "googleapis"]
+      py: ["mailchimp_marketing", "slack_sdk", "googleapiclient"]
+    registry:
+      npm: ["@mailchimp/mailchimp_marketing", "@slack/web-api", "discord.js", "googleapis"]
+      pypi: ["mailchimp-marketing", "slack-sdk", "google-api-python-client"]
+    match:
+      member: ["lists.addListMember", "lists.updateListMember", "lists.setListMember",
+               "lists.batchListMembers", "lists.deleteListMember", "lists.updateListMemberTags",
+               "conversations.invite", "conversations_invite",
+               "conversations.kick", "conversations_kick",
+               "usergroups.users.update", "usergroups_users_update",
+               "members.insert", "members.delete", "members.add", "members.remove"]
+    note: >
+      Membership of a durable audience (a mailing list, a Slack channel, a Google
+      group). A send reaches whoever is already addressed; this changes who every
+      LATER send reaches, with nobody in the room. Not one of these names is a send
+      verb, so this cannot collapse into `external-comms` — a site that fires both
+      rules is doing both things.
+      No `payload_arg`: the address is argument 1 of `addListMember` and argument 0
+      of `conversations.invite`, and one index cannot be true of both.
+      Python's Google client builds calls as `service.members().insert(...)`, and
+      the `()` breaks the member chain, so that shape is missed here and caught by
+      `recipients.audience.http` only when the URL is written out.
+
+  - id: recipients.message.header
+    action: alter-recipients
+    kind: io
+    severity: high
+    trifecta_role: external-comms
+    remedies: [closed-list, human-release]
+    imports:
+      ts: ["nodemailer", "@sendgrid/mail", "resend", "postmark", "mailgun.js",
+           "@aws-sdk/client-ses", "@aws-sdk/client-sesv2"]
+      py: ["smtplib", "email", "sendgrid", "resend", "postmarker"]
+    registry:
+      npm: ["nodemailer", "@sendgrid/mail", "resend", "postmark", "mailgun.js",
+            "@aws-sdk/client-ses", "@aws-sdk/client-sesv2"]
+      pypi: ["sendgrid", "resend", "postmarker"]
+    match:
+      member: ["to", "cc", "bcc", "recipients", "to_addrs"]
+      symbol: ["add_header", "replace_header"]
+      # The address field being WRITTEN, on a line that is not a send. Without the
+      # assignment test `member: ["to"]` matches every read of `.to`, and without
+      # the header-name test `add_header` matches `add_header("Content-Type", …)`.
+      # `to:` inside a send call has a colon rather than an `=`, which is what keeps
+      # this off the line `comms.email.sdk` already reports.
+      requires: "(?i)\\.\\s*(?:to|cc|bcc|recipients?|to_?addrs)\\s*=[^=]|[\"'](?:to|cc|bcc|resent-to|resent-cc|resent-bcc)[\"']\\s*[,\\]]"
+    note: >
+      `msg.bcc = extracted` — the recipient set rewritten as its own statement,
+      which is the shape a model-chosen address arrives in. Over-approximates in
+      one known way: inside a file that imports an email SDK, `dateRange.to = end`
+      fires too. Two letters is not much to match on, and dropping `to` would lose
+      `mailOptions.to = contact.email`, which is the case worth having.
+      `msg["To"] = chosen` is a subscript assignment with no dot and no bare
+      identifier, so no `match` field can see it. Python code that builds headers
+      that way is invisible to this rule.
+
+  - id: recipients.audience.http
+    action: alter-recipients
+    kind: io
+    severity: high
+    trifecta_role: external-comms
+    remedies: [closed-list, human-release]
+    match:
+      url_contains: ["slack.com/api/conversations.invite", "slack.com/api/conversations.kick",
+                     "slack.com/api/usergroups.users.update",
+                     "admin.googleapis.com/admin/directory/v1/groups",
+                     "api.sendgrid.com/v3/marketing/contacts",
+                     "api.mailgun.net/v3/lists",
+                     "api.mailchimp.com/3.0/lists"]
+    note: >
+      Membership changed over hand-rolled HTTP rather than an SDK, which is how the
+      Google Directory API usually ships in Python. The last two entries match a
+      READ of the list as well as a write: the method sits on the request options,
+      not in the URL, and a rule that waited for the verb would miss every write.
 
   # --- write to a system of record -----------------------------------------
   - id: records.accounting

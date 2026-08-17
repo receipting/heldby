@@ -105,6 +105,22 @@ def test_configured_providers_are_matched_as_bare_literals(cat):
         assert any(host in lit or lit in host for lit in literals), host
 
 
+def test_an_action_in_the_vocabulary_is_detectable_or_declared_undetectable(cat):
+    """A declared action with no rule is a section that can never fill in.
+
+    `alter-recipients` was in ACTIONS from the start and had no rule for months,
+    so heldby could not corroborate receipting's `contact-extraction` claim; it
+    stayed an assertion, which is the failure mode the tool exists to remove.
+
+    `decide-about-person` is still bare on purpose — credit, hiring, claims and
+    moderation are judgements about what a call means, not signatures — and
+    sinks.yml's header says so. If it ever gains a rule, that header is wrong.
+    """
+    detected = {rule.action for rule in cat.sink_rules()}
+    assert "alter-recipients" in detected
+    assert ACTIONS - detected == {"decide-about-person"}
+
+
 def test_deprecated_rules_are_kept_not_deleted(cat):
     """A superseded SDK stays catalogued because repos still on it exist."""
     legacy = cat.by_id["google.generative-ai.legacy"]

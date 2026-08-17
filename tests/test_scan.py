@@ -390,6 +390,66 @@ def test_bare_eval_still_fires(cat, tmp_path):
     assert any(s.action == "execute-code" for s in scan(tmp_path, cat).sites)
 
 
+def test_a_recipient_change_is_found_and_is_not_the_send(cat, tmp_path):
+    """`alter-recipients` sat in the closed vocabulary with no rule at all, so a
+    repo that rewrites who its mail reaches produced an empty section — and
+    receipting's declared `contact-extraction` reach had nothing to corroborate.
+
+    The bar the rules have to clear is firing where `comms.email.sdk` does not.
+    Changing an audience and sending to it are different lines here, and a rule
+    that could not separate them would be a second copy of the send row.
+    """
+    (tmp_path / "m.ts").write_text(
+        "import { WebClient } from '@slack/web-api'\n"
+        "import nodemailer from 'nodemailer'\n"
+        "const opts = {}\n"
+        "opts.bcc = extracted\n"
+        "await web.conversations.invite({ channel, users: picked })\n"
+        "await nodemailer.createTransport({}).sendMail(opts)\n",
+        encoding="utf-8",
+    )
+    sites = scan(tmp_path, cat).sites
+    changed = {s.line for s in sites if s.action == "alter-recipients"}
+    sent = {s.line for s in sites if s.action == "external-comms"}
+    assert changed == {4, 5}
+    assert sent == {6}
+    assert not (changed & sent), "a recipient change is not the send"
+
+
+def test_a_plain_send_is_never_a_recipient_change(cat, tmp_path):
+    """The duplicate trap, and the reason there is no rule for the `to:` of a send.
+
+    Every send names a recipient. A rule reading that argument fires on all of
+    them — including `to: 'ops@corp.com'`, which no model chose — so the whole
+    section becomes `external-comms` under a second name.
+    """
+    (tmp_path / "s.ts").write_text(
+        "import { Resend } from 'resend'\n"
+        "const resend = new Resend(k)\n"
+        "await resend.emails.send({ from: 'a@b.c', to: contact.email, html: prose })\n",
+        encoding="utf-8",
+    )
+    sites = scan(tmp_path, cat).sites
+    assert any(s.action == "external-comms" for s in sites)
+    assert not [s for s in sites if s.action == "alter-recipients"]
+
+
+def test_only_a_recipient_header_counts_and_only_when_written(cat, tmp_path):
+    """`add_header` also sets Content-Type, and `.to` is read far more often than
+    it is assigned. Both read as recipient changes until `requires` narrowed them."""
+    (tmp_path / "h.py").write_text(
+        "import smtplib\n"
+        "from email.message import EmailMessage\n"
+        "msg = EmailMessage()\n"
+        "msg.add_header('Content-Type', 'text/html')\n"
+        "addr = msg.to\n"
+        "msg.add_header('Bcc', chosen)\n",
+        encoding="utf-8",
+    )
+    hits = [s.line for s in scan(tmp_path, cat).sites if s.action == "alter-recipients"]
+    assert hits == [6]
+
+
 def test_prose_in_a_comment_is_not_a_finding(cat, tmp_path):
     """A comment reading "need to set the packages to run this code block" fired
     the subprocess rule on the word "run". A report whose findings include English
