@@ -407,3 +407,47 @@ def test_an_unexplained_model_call_still_reads_as_a_finding(scans):
     row = Process(name="x", ai_class="read", model="m", repo="ts-messy", does="d", held_by="h")
     page = render_html(_register([row]), scans)
     assert 'class="alarm"><p>' in page
+
+
+def test_the_summary_is_the_same_document_truncated(scans):
+    """Two versions, one set of facts. The short one is where a counterparty
+    stops reading, so it must not be able to say something the long one doesn't.
+    """
+    from heldby.html import render_html
+
+    reg = _register([GOOD, GAP], key_findings=["A finding."])
+    full = render_html(reg, scans)
+    brief = render_html(reg, scans, summary=True)
+
+    assert len(brief) < len(full)
+    # The table and the framework survive; everything after it does not.
+    assert "How each pathway is filed" in brief
+    assert "<h2>The register</h2>" in brief
+    assert "Worth knowing" not in brief
+    assert "Completeness check" not in brief
+    assert "What this code can and can" not in brief
+    # Same rows, same wording.
+    for row in ("invoice-extraction", "blast"):
+        assert row in brief and row in full
+
+
+def test_the_summary_keeps_the_bad_news(scans):
+    """The version most likely to be read is the one most tempting to soften.
+    A gap, and a class that disagrees with its own reach, both stay above the
+    fold."""
+    from heldby.html import render_html
+
+    misfiled = Process(name="bank-routing", ai_class="read", model="m", repo="r",
+                       does="Picks an account.", held_by="h", reaches=["move-money"])
+    brief = render_html(_register([GAP, misfiled]), scans, summary=True)
+    assert "nothing</span>" in brief
+    assert "have nothing holding them" in brief
+    assert "reaching something outside it" in brief
+
+
+def test_the_summary_says_it_is_one(scans):
+    from heldby.html import render_html
+
+    brief = render_html(_register([GOOD]), scans, summary=True)
+    assert "This is the summary" in brief
+    assert brief.rstrip().endswith("</body></html>")

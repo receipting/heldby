@@ -242,7 +242,21 @@ def _stat(number: int, label: str, gap: bool = False) -> str:
     return f'<li class="{cls}"><span class="n">{number}</span><span class="k">{_esc(label)}</span></li>'
 
 
-def render_html(register: Register, scans: dict[str, ScanReport]) -> str:
+def render_html(
+    register: Register, scans: dict[str, ScanReport], summary: bool = False
+) -> str:
+    """The full register, or the summary a counterparty gets.
+
+    `summary=True` stops after the table: the masthead, the counts, what the
+    organisation does, how a pathway is filed, and every row with its class and
+    what holds it. It is the same document truncated, never a different one —
+    same numbers, same rows, same wording, rendered from the same object.
+
+    **It keeps the bad news.** The gap count, the rows held by nothing and the
+    class/reach contradictions are all above the fold and all stay. A short
+    version that dropped them would be the brochure this tool exists to refuse,
+    and it is precisely the version most likely to be read.
+    """
     generated = register.generated or date.today().strftime("%-d %B %Y")
     drafted = register.drafted
     processes = register.sorted_processes()
@@ -337,6 +351,16 @@ def render_html(register: Register, scans: dict[str, ScanReport]) -> str:
             add(f"<li><code>{_esc(p.name)}</code> — filed {_chip(p.ai_class)}, "
                 f"reaches {reaches}</li>")
         add("</ul></div>")
+
+    if summary:
+        add('<p class="note">This is the summary. The full register — what each pathway does '
+            "and the mechanism that holds it, what this code can and cannot do, what holds the "
+            "AI as it changes, the scope, and an independent completeness sweep — runs to "
+            "several more pages and is available on request.</p>")
+        add(f"<footer>Generated {_esc(generated)} by heldby. Not taint analysis, not a "
+            "certification, not legal advice.</footer>")
+        add("</body></html>")
+        return "\n".join(o)
 
     if register.key_findings:
         add("<h2>Worth knowing</h2><ol>")

@@ -114,6 +114,13 @@ Always write the HTML too. It is the copy a person actually reads and shares —
 one self-contained file, printed to PDF from any browser with Cmd-P. Tell the
 user it is there.
 
+Add `--out-summary-html` when the register is going to a counterparty as well as
+inward. It is the same document stopped after the table: the counts, the four
+classes, and every row with its class and what holds it. **It keeps the gaps and
+the contradictions** — the short version is the one most likely to be read and
+therefore the one most tempting to soften, and a summary that can say something
+the full register does not is worse than no summary.
+
 The renderer will not invent a control and will not soften a missing one: an empty
 `held_by` prints as **nothing**, in bold. That is correct — leave it empty when
 nothing holds it.
