@@ -354,7 +354,11 @@ def render_markdown(register: Register, scans: dict[str, ScanReport]) -> str:
     out.append("|---|---|---|")
     for p in processes:
         mark = " †" if p.source == "drafted" else ""
-        out.append(f"| `{p.name}`{mark} | {CLASS_LABEL.get(p.ai_class, p.ai_class)} | {_cell(p.cell)} |")
+        # Tier and class travel together in the cell. The class alone made the one
+        # question the framework asks — does this cross out — something a reader had
+        # to look back up the page to answer, on every row.
+        klass = f"{TIER_LABEL[p.tier]} · {CLASS_LABEL.get(p.ai_class, p.ai_class)}"
+        out.append(f"| `{p.name}`{mark} | {klass} | {_cell(p.cell)} |")
     out.append("")
     if drafted:
         out.append("_† machine-drafted, unreviewed._")
