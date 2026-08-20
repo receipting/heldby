@@ -451,3 +451,11 @@ def test_the_summary_says_it_is_one(scans):
     brief = render_html(_register([GOOD]), scans, summary=True)
     assert "This is the summary" in brief
     assert brief.rstrip().endswith("</body></html>")
+
+
+def test_the_summary_makes_no_promise_it_cannot_keep(scans):
+    """Cross-references to the detail are exactly what truncation removes."""
+    from heldby.html import render_html
+
+    brief = render_html(_register([GOOD]), scans, summary=True)
+    assert "below" not in brief, "the summary points at a section it does not carry"

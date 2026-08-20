@@ -339,8 +339,11 @@ def render_html(
             add(f"<li><code>{_esc(p.name)}</code> — {_chip(p.ai_class)}</li>")
         add("</ul></div>")
     else:
+        # "below" is a promise the summary does not keep — the detail it points at
+        # is exactly what truncation removes.
+        where = "Each one names" if summary else "Each one below points at"
         add('<div class="clear"><p><strong>Every pathway has a named control.</strong> '
-            "Each one below points at a mechanism in the code, not at a policy.</p></div>")
+            f"{where} a mechanism in the code, not a policy.</p></div>")
     if crossed:
         add(f'<div class="alarm"><p><span class="gap">{len(crossed)} pathway(s) are filed as '
             "staying inside the organisation while reaching something outside it.</span> "
