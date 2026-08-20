@@ -429,6 +429,7 @@ def cmd_register(args: argparse.Namespace) -> int:
         processes=processes,
         key_findings=list(spec.get("key_findings") or []),
         protected_actions=spec.get("protected_actions") or {},
+        lifecycle=spec.get("lifecycle") or {},
         scope_notes=list(spec.get("scope_notes") or []),
         excluded=list(spec.get("excluded") or []),
         generated=spec.get("generated", ""),

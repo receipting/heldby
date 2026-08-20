@@ -195,6 +195,17 @@ auditor reading the code next to it.
 
 If nothing holds it, write nothing. Not "under review", not "planned".
 
+### What holds the estate is a different question
+
+A declaration that won't compile without a class, a lint that refuses an undeclared call, a
+sweep that regenerates the table — these are real controls and none of them belongs in
+*Held by*. That column answers a runtime question: what stood between this output and this
+effect, on the request that just ran. None of the above stands between anything.
+
+They go in `lifecycle`, rendered as its own section, because a register that proves every
+row is held and says nothing about how the next row gets caught has done half the job — and
+because the moment assurance is allowed into the *Held by* column it reads as a gate.
+
 ---
 
 ## The commands
