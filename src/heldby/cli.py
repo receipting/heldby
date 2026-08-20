@@ -450,6 +450,12 @@ def cmd_register(args: argparse.Namespace) -> int:
             f"wrote {args.out_html} — open it and print to PDF (Cmd-P) for a shareable copy",
             file=sys.stderr,
         )
+    if args.out_summary_html:
+        Path(args.out_summary_html).write_text(
+            render_html(register, scans, summary=True), encoding="utf-8"
+        )
+        print(f"wrote {args.out_summary_html} — the same register, stopped after the table",
+              file=sys.stderr)
     if not args.out_md and not args.out_json and not args.out_html:
         print(json.dumps(payload, indent=2) if args.json else markdown)
 
@@ -682,6 +688,14 @@ def main(argv: list[str] | None = None) -> int:
         "--out-html",
         metavar="FILE",
         help="write a self-contained HTML register — open it and Cmd-P for a PDF",
+    )
+    reg.add_argument(
+        "--out-summary-html",
+        metavar="FILE",
+        help=(
+            "write the same register stopped after the table — the copy a counterparty gets. "
+            "Same numbers and same rows, gaps and contradictions included"
+        ),
     )
     reg.add_argument("--json", action="store_true", help="print JSON instead of markdown")
     reg.add_argument(
