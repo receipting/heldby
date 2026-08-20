@@ -41,6 +41,7 @@ from .render import (
     TIER_ORDER,
     Register,
     _aggregate_limits,
+    _explained_by_scope,
     _completeness,
     _unattributed_sites,
 )
@@ -377,6 +378,16 @@ def render_html(register: Register, scans: dict[str, ScanReport]) -> str:
             add(f"<li><strong>{_esc(action)}</strong> — {_md(prose)}</li>")
         add("</ul>")
 
+    if register.lifecycle:
+        add("<h2>What holds the AI as it changes</h2>")
+        add('<p class="note">Every row above names what holds one output. This is what holds '
+            "the estate: what stops a process appearing that nothing holds. None of these is "
+            "credited in the <em>Held by</em> column, because a control there has to stand "
+            "between one output and one effect.</p><ul>")
+        for leg, prose in register.lifecycle.items():
+            add(f"<li><strong>{_esc(leg)}</strong> — {_md(prose)}</li>")
+        add("</ul>")
+
     if register.scope_notes or register.excluded:
         add("<h2>Scope</h2>")
         for note in register.scope_notes:
@@ -407,10 +418,18 @@ def render_html(register: Register, scans: dict[str, ScanReport]) -> str:
             "the code uses is in the table or the out-of-scope list, and every file with a "
             "model call in it is claimed by a row.</p></div>")
     if unattributed:
-        add(f'<div class="alarm"><p>{len(unattributed)} file(s) contain a model call no row '
-            "claims:</p><ul>")
+        explained = {p: _explained_by_scope(p, register) for p in unattributed}
+        # A deliberate, documented exclusion is not a defect and must not render as
+        # one — the reader was told what it is two inches up the page.
+        box = "clear" if all(explained.values()) else "alarm"
+        tail = (", and the Scope section above accounts for each"
+                if all(explained.values()) else "")
+        add(f'<div class="{box}"><p>{len(unattributed)} file(s) contain a model call no row '
+            f"claims{tail}:</p><ul>")
         for path in unattributed:
-            add(f"<li><code>{_esc(path)}</code></li>")
+            why = explained[path]
+            note = f' — see <em>{_esc(why)}</em> above' if why else ""
+            add(f"<li><code>{_esc(path)}</code>{note}</li>")
         add("</ul></div>")
     if unfound:
         add(f"<p>{len(unfound)} row(s) could not be located from the code alone ("

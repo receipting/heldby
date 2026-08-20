@@ -118,8 +118,16 @@ The renderer will not invent a control and will not soften a missing one: an emp
 `held_by` prints as **nothing**, in bold. That is correct — leave it empty when
 nothing holds it.
 
-Two fields in that file are easy to miss and carry a lot of the value:
+Three fields in that file are easy to miss and carry a lot of the value:
 
+- **`lifecycle`** — what holds the AI *as it changes*, as distinct from what holds any
+  one output. Every row's `held_by` answers a runtime question; none of them answers the
+  one an auditor asks next, which is what stops a process appearing that nothing holds.
+  A declaration that will not compile without a class, a lint that refuses an undeclared
+  call, a sweep that regenerates the table — those go here. They are **not** eligible for
+  `held_by` and must never be written into it: a control there stands between one output
+  and one effect, and none of these does. Keeping them in their own section is what stops
+  assurance reading as a gate. Leave it empty if the repo has none, and say so.
 - **`protected_actions`** — one entry per action worth protecting, saying what holds
   it *system-wide*. This is where **capability** goes, as distinct from reach.
   "There is no broker SDK anywhere in this repository, so the system cannot place a

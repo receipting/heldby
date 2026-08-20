@@ -354,3 +354,56 @@ def test_scope_table_columns_are_20_40_40(scans):
     for n, w in ((1, "20%"), (2, "40%"), (3, "40%")):
         assert f"table.scope td:nth-child({n}) {{ width:{w}; }}" in page
     assert "table.scope code { overflow-wrap:anywhere" in page, "identifiers must wrap"
+
+
+def test_lifecycle_controls_are_kept_out_of_the_held_by_column(scans):
+    """What holds the estate as it changes is not what holds an output.
+
+    A declaration gate and a lint reduce the chance of an unheld process
+    existing. Neither stands between one model's output and one effect, which is
+    what `held_by` records — and the moment a register lets them into that
+    column, assurance reads as a gate.
+    """
+    reg = _register([GOOD], lifecycle={"Enforced": "A lint refuses an undeclared call."})
+    text = render_markdown(reg, scans)
+    assert "## What holds the AI as it changes" in text
+    assert "A lint refuses an undeclared call." in text
+    # ...and it says why it is a separate section rather than a row.
+    assert "has to stand between one output and one effect" in text
+
+
+def test_a_register_with_no_lifecycle_section_omits_it(scans):
+    assert "What holds the AI as it changes" not in render_markdown(_register([GOOD]), scans)
+
+
+def test_lifecycle_reaches_the_machine_output(scans):
+    payload = render_json(_register([GOOD], lifecycle={"Declared": "It will not compile."}), scans)
+    assert payload["lifecycle"] == {"Declared": "It will not compile."}
+
+
+def test_a_scoped_out_model_call_is_not_reported_as_a_defect(scans):
+    """The completeness check must still report the file — no row claims it, and
+    that is true — without contradicting the Scope section that just explained
+    it. Reporting it in the same red as a real gap trains a reader to skip both.
+    """
+    from heldby.html import render_html
+
+    # Claims every model-call file except src/bypass.ts, which Scope names.
+    row = Process(name="x", ai_class="read", model="m", repo="ts-messy", does="d",
+                  held_by="h", files=["src/gateway.ts", "agents.py", "report.py"])
+    excluded = [{"name": "bypass.ts", "what": "An eval harness.", "why": "Not shipped."}]
+    reg = _register([row], excluded=excluded)
+    text = render_markdown(reg, scans)
+    assert "the Scope section above accounts for each" in text
+    assert "see *bypass.ts* above" in text
+    page = render_html(reg, scans)
+    assert 'class="clear"' in page and "bypass.ts</em> above" in page
+
+
+def test_an_unexplained_model_call_still_reads_as_a_finding(scans):
+    """The softening is only for files Scope names. Anything else stays a gap."""
+    from heldby.html import render_html
+
+    row = Process(name="x", ai_class="read", model="m", repo="ts-messy", does="d", held_by="h")
+    page = render_html(_register([row]), scans)
+    assert 'class="alarm"><p>' in page

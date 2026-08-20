@@ -145,6 +145,20 @@ class Register:
     #: acted on. Written by whoever classified — never generated here.
     key_findings: list[str] = field(default_factory=list)
     protected_actions: dict[str, str] = field(default_factory=dict)
+    #: What holds the AI as it CHANGES, as distinct from what holds any one
+    #: output. `held_by` answers a runtime question — what stands between this
+    #: model's output and this effect, on the request that just ran. It cannot
+    #: answer the other one an auditor asks: what stops a process appearing that
+    #: nothing holds. A register that proves every row is held and says nothing
+    #: about how the next row gets caught has only done half the job.
+    #:
+    #: These are lifecycle controls — a declaration that will not compile without
+    #: a class, a lint that refuses an undeclared call, a sweep that regenerates
+    #: the table. They are deliberately NOT eligible for `held_by`: a control
+    #: there must stand between one output and one effect, and none of these
+    #: does. Keeping them in their own section is what stops assurance reading as
+    #: a gate.
+    lifecycle: dict[str, str] = field(default_factory=dict)
     scope_notes: list[str] = field(default_factory=list)
     excluded: list[dict] = field(default_factory=list)
     generated: str = ""
@@ -163,6 +177,22 @@ class Register:
 
 def _cell(text: str) -> str:
     return text.replace("|", "\\|").replace("\n", " ").strip()
+
+
+def _explained_by_scope(path: str, register: Register) -> str | None:
+    """The `excluded` entry that already accounts for this file, if any.
+
+    A model call the register deliberately scoped out still shows up in the
+    unattributed list, because no row claims it — which is correct. Rendering it
+    as a defect is not: the reader has just been told what it is and why it is
+    out, two inches further up. This pairs the two so the check can report the
+    finding without contradicting the page it sits on.
+    """
+    for item in register.excluded:
+        name = str(item.get("name", "")).strip()
+        if name and name in path:
+            return name
+    return None
 
 
 def _unattributed_sites(register: Register, scans: dict[str, ScanReport]) -> list[str]:
@@ -418,6 +448,20 @@ def render_markdown(register: Register, scans: dict[str, ScanReport]) -> str:
             out.append(f"- **{action}** — {prose.strip()}")
         out.append("")
 
+    if register.lifecycle:
+        out.append("## What holds the AI as it changes")
+        out.append("")
+        out.append(
+            "Every row above names what holds one output. This is what holds the estate: what "
+            "stops a process appearing that nothing holds. None of these is credited in the "
+            "*Held by* column, because a control there has to stand between one output and one "
+            "effect."
+        )
+        out.append("")
+        for leg, prose in register.lifecycle.items():
+            out.append(f"- **{leg}** — {prose.strip()}")
+        out.append("")
+
     if register.scope_notes or register.excluded:
         out.append("## Scope")
         out.append("")
@@ -453,10 +497,18 @@ def render_markdown(register: Register, scans: dict[str, ScanReport]) -> str:
                    "table or the out-of-scope list.")
     out.append("")
     if unattributed:
-        out.append(f"{len(unattributed)} file(s) contain a model call no row claims:")
+        explained = {p: _explained_by_scope(p, register) for p in unattributed}
+        if all(explained.values()):
+            out.append(
+                f"{len(unattributed)} file(s) contain a model call no row claims, and the Scope "
+                "section above accounts for each:"
+            )
+        else:
+            out.append(f"{len(unattributed)} file(s) contain a model call no row claims:")
         out.append("")
         for path in unattributed:
-            out.append(f"- `{path}`")
+            why = explained[path]
+            out.append(f"- `{path}`" + (f" — see *{why}* above" if why else ""))
         out.append("")
     if unfound:
         out.append(
@@ -523,6 +575,7 @@ def render_json(register: Register, scans: dict[str, ScanReport]) -> dict:
             "contradicting_tier": sum(1 for p in register.processes if p.contradicts_tier),
         },
         "protected_actions": register.protected_actions,
+        "lifecycle": register.lifecycle,
         "excluded": register.excluded,
         "completeness": {
             "components_swept": sorted(scans),
