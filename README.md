@@ -6,12 +6,12 @@ You get an *AI register*: a table you can hand to an auditor, paste into a vendo
 questionnaire, or publish as a trust-centre page.
 
 ```
-| Process        | Class    | Held by                                          |
-|----------------|----------|--------------------------------------------------|
-| matching       | Decide   | sign gate; totals recomputed; threshold else human|
-| support-chat   | Converse | closed loop; no tool use at all                   |
-| closing-draft  | Send     | a named person picks recipients and clicks Send   |
-| report-writer  | Send     | **nothing**                                       |
+| Process        | Class            | Held by                                    |
+|----------------|------------------|--------------------------------------------|
+| matching       | Act · Decide     | totals recomputed; threshold else a human  |
+| support-chat   | Inform · Converse| closed loop; no tool use at all            |
+| closing-draft  | Act · Send       | a named person picks recipients, clicks Send|
+| report-writer  | Act · Send       | **nothing**                                |
 ```
 
 That last row is the one worth having. A register that can't record a gap is a brochure.
