@@ -30,7 +30,7 @@ CLASS_LABEL = {"read": "Read", "converse": "Converse", "decide": "Decide", "send
 CLASS_LINE = {
     "read": "turns documents or messages into data. The output gets checked against something real.",
     "converse": "answers the person who asked. It reaches nobody else and does nothing.",
-    "decide": "acts with no person on the fast path, inside deterministic bounds and a threshold.",
+    "decide": "acts inside deterministic bounds and a threshold; anything outside goes to a person.",
     "send": "carries prose out to someone else. A named person releases it.",
 }
 
